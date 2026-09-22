@@ -1,0 +1,7 @@
+# Written at runtime by the module
+/microsoftadsfeed/export/*
+!/microsoftadsfeed/export/index.php
+!/microsoftadsfeed/export/.htaccess
+
+# Build output
+/dist/
