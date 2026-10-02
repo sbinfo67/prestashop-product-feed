@@ -1,6 +1,6 @@
 <?php
 /**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -62,8 +62,8 @@ class ProductFeedFeedModuleFrontController extends ModuleFrontController
         }
 
         clearstatcache(true, $path);
-        header('Content-Type: text/plain; charset=utf-8');
-        header('Content-Disposition: inline; filename="products-' . $channel . '.txt"');
+        header('Content-Type: ' . ProductFeedChannel::contentType($channel));
+        header('Content-Disposition: inline; filename="products-' . $channel . '.' . ProductFeedChannel::extension($channel) . '"');
         header('Content-Length: ' . filesize($path));
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', filemtime($path)) . ' GMT');
         header('Cache-Control: no-store, max-age=0');

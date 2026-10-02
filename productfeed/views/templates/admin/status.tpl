@@ -1,5 +1,5 @@
 {**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO

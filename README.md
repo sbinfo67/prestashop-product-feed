@@ -1,9 +1,9 @@
 # Flux produits pour PrestaShop 9
 
 Publie votre catalogue pour **Google Merchant Center**, **Microsoft Merchant
-Center**, **Meta** (Facebook, Instagram) et **Pinterest**. Chaque plateforme a
-sa propre adresse, au format qu'elle attend, et télécharge le fichier toute
-seule. Les fichiers se mettent à jour quand vous ajoutez, modifiez ou supprimez
+Center**, **Meta** (Facebook, Instagram), **Pinterest** et **TikTok**. Chaque
+plateforme a sa propre adresse, au format qu'elle attend, et télécharge le
+fichier toute seule. Les fichiers se mettent à jour quand vous ajoutez, modifiez ou supprimez
 un produit, sans tâche cron.
 
 - Compatible PrestaShop 9.0 et supérieur, PHP 8.1 et supérieur (testé sur 9.1.5)
@@ -40,25 +40,33 @@ mot de passe : la clé de 32 caractères tient lieu de mot de passe.
 | Microsoft Merchant Center | Flux, Créer un flux, méthode « Automatically download file from URL » |
 | Meta | Commerce Manager, Catalogue, Sources de données, flux de données planifié |
 | Pinterest | Annonces, Catalogues, Ajouter une source de données |
+| TikTok | TikTok Ads Manager, Catalogues, Ajouter des produits, Programmation de flux de données |
 
 Choisissez un téléchargement quotidien. Pour chaque plateforme, la langue et le
 pays déclarés doivent correspondre à la langue réglée dans le module.
 
 ## Ce qui change d'une plateforme à l'autre
 
-Les quatre fichiers contiennent les mêmes produits et les mêmes prix. Seuls
+Les cinq fichiers contiennent les mêmes produits et les mêmes prix. Seuls
 quelques détails de forme diffèrent, selon la spécification de chacune :
 
-| | Google | Microsoft | Meta | Pinterest |
-| --- | --- | --- | --- | --- |
-| Colonne de catégorie | `google_product_category` | `product_category` | `google_product_category` | `google_product_category` |
-| Disponibilité | `in_stock` | `in stock` | `in stock` | `in stock` |
-| Prix réduit | `11.82 EUR` | `11.82` | `11.82 EUR` | `11.82 EUR` |
-| Frais de port | `FR:::6.90 EUR` | `6.90` | `FR:::6.90 EUR` | `FR:::6.90 EUR` |
-| `identifier_exists` | `yes` / `no` | `TRUE` / `FALSE` | absent | absent |
-| Description | 5 000 caractères | 10 000 | 9 999 | 10 000 |
+| | Google | Microsoft | Meta | Pinterest | TikTok |
+| --- | --- | --- | --- | --- | --- |
+| Format | texte tabulé | texte tabulé | texte tabulé | texte tabulé | CSV |
+| Identifiant | `id` | `id` | `id` | `id` | `sku_id` |
+| Colonne de catégorie | `google_product_category` | `product_category` | `google_product_category` | `google_product_category` | `google_product_category` |
+| Valeur de catégorie | telle que saisie | telle que saisie | telle que saisie | telle que saisie | chemin anglais, 3 niveaux |
+| Disponibilité | `in_stock` | `in stock` | `in stock` | `in stock` | `in stock` |
+| Prix réduit | `11.82 EUR` | `11.82` | `11.82 EUR` | `11.82 EUR` | `11.82 EUR` |
+| Frais de port | `FR:::6.90 EUR` | `6.90` | `FR:::6.90 EUR` | `FR:::6.90 EUR` | absents |
+| `identifier_exists` | `yes` / `no` | `TRUE` / `FALSE` | absent | absent | absent |
+| Description | 5 000 caractères | 10 000 | 9 999 | 10 000 | 5 000 |
 
-Une même taxonomie sert à tous : celle de Google, par ID ou par chemin.
+Une même taxonomie sert à tous : celle de Google. Saisissez de préférence des
+ID : TikTok n'accepte qu'un chemin en anglais limité à trois niveaux, que le
+module déduit de l'ID grâce à la liste publiée par Google, téléchargée une fois
+par mois. Sans accès à cette liste, ou avec un chemin en français, TikTok ne
+reçoit que les trois premiers niveaux saisis.
 
 ## Comment les fichiers restent à jour
 
@@ -112,8 +120,11 @@ produits sans catégorie, sans marque ou sans identifiant.
 ## Catégories
 
 Une sous-catégorie hérite de sa catégorie parente : renseigner les catégories
-principales suffit souvent. Quelques valeurs utiles pour des produits de la
-ruche :
+principales suffit souvent. Pour un produit qui ne correspond pas à la catégorie
+de son rayon, la section **Catégorie par produit** permet de lui donner la
+sienne ; elle l'emporte sur celle du rayon.
+
+Quelques valeurs utiles pour des produits de la ruche :
 
 | ID | Catégorie |
 | --- | --- |
@@ -122,9 +133,14 @@ ruche :
 | 4748 | Alimentation, boissons et tabac > Aliments > Bonbons et chocolat |
 | 1876 | Alimentation, boissons et tabac > Aliments > Boulangerie |
 | 2073 | Alimentation, boissons et tabac > Boissons > Thé et infusions |
+| 525 | Santé et beauté > Santé > Fitness et nutrition > Vitamines et compléments alimentaires |
+| 2592 | Santé et beauté > Hygiène personnelle > Cosmétiques > Soin de la peau > Crèmes et lotions |
+| 526 | Santé et beauté > Hygiène personnelle > Soins buccaux |
+| 4551 | Santé et beauté > Santé > Soins respiratoires |
 | 588 | Maison et jardin > Décorations > Parfums d'intérieur > Bougies |
 | 505375 | Arts et loisirs > Loisirs et arts créatifs > Matériaux pour loisirs créatifs > Cire brute |
 | 5134 | Maison et jardin > Arts de la table et arts culinaires > Stockage des aliments > Pots à miel |
+| 3939 | Maison et jardin > Arts de la table et arts culinaires > Arts de la table > Couverts > Cuillères |
 | 784 | Médias > Livres |
 
 Liste complète : [en français](https://www.google.com/basepages/producttype/taxonomy-with-ids.fr-FR.txt),
@@ -139,7 +155,7 @@ Liste complète : [en français](https://www.google.com/basepages/producttype/ta
   recommandent, ou retirés des flux.
 - **Description** complète ou résumé, **taille des images**.
 - **Marque par défaut** pour les produits sans marque, par exemple vos propres
-  productions. Meta refuse les produits sans marque.
+  productions. Meta et TikTok refusent les produits sans marque.
 - **Référence comme MPN**, pour les produits que vous fabriquez.
 - **Frais de port** forfaitaires et seuil de gratuité, facultatifs en France.
 - **Produits exclus** par ID, et catégories exclues dans le tableau.
@@ -165,9 +181,6 @@ Le flux Google suit le format Google Shopping, que d'autres services savent lire
 directement : c'est l'adresse à leur donner. Les annonces OpenAI (ChatGPT), par
 exemple, acceptent un flux au format Google. Vérifiez l'aperçu d'import du
 service avant de lancer une campagne.
-
-TikTok n'est pas couvert : son catalogue attend une colonne `sku_id` à la place
-d'`id` et un fichier CSV pour les flux planifiés.
 
 ## Venir de l'ancien module
 
@@ -225,3 +238,5 @@ besoin avant de les envoyer.
 - Les frais de port se limitent à un forfait avec seuil de gratuité ; sinon,
   laissez chaque plateforme appliquer ses propres réglages de livraison.
 - Pas d'inventaire de magasin physique (fiches locales Google).
+- La traduction des ID de catégorie pour TikTok demande au serveur de joindre
+  `www.google.com` une fois par mois.

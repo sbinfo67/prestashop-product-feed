@@ -1,6 +1,6 @@
 <?php
 /**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -182,7 +182,7 @@ class ProductFeedStore
      */
     public function purge()
     {
-        foreach (glob($this->directory . 'feed-*') ?: [] as $file) {
+        foreach (array_merge(glob($this->directory . 'feed-*') ?: [], glob($this->directory . 'taxonomy-*') ?: []) as $file) {
             @unlink($file);
         }
         @unlink($this->directory . 'changed');

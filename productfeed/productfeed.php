@@ -1,9 +1,9 @@
 <?php
 /**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
- * Publishes the catalogue as the tab-separated files Google Merchant Center,
- * Microsoft Merchant Center, Meta and Pinterest download, and keeps them in
+ * Publishes the catalogue as the files Google Merchant Center, Microsoft
+ * Merchant Center, Meta, Pinterest and TikTok download, and keeps them in
  * step with every product change.
  *
  * @author    SBINFO <contact@sbinfo.pro>
@@ -18,6 +18,7 @@ if (!defined('_PS_VERSION_')) {
 require_once __DIR__ . '/classes/ProductFeedConfig.php';
 require_once __DIR__ . '/classes/ProductFeedText.php';
 require_once __DIR__ . '/classes/ProductFeedChannel.php';
+require_once __DIR__ . '/classes/ProductFeedTaxonomy.php';
 require_once __DIR__ . '/classes/ProductFeedStore.php';
 require_once __DIR__ . '/classes/ProductFeedBuilder.php';
 
@@ -79,7 +80,7 @@ class ProductFeed extends Module
     {
         $this->name = 'productfeed';
         $this->tab = 'advertising_marketing';
-        $this->version = '2.0.0';
+        $this->version = '2.1.0';
         $this->author = 'SBINFO';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -88,7 +89,7 @@ class ProductFeed extends Module
         parent::__construct();
 
         $this->displayName = $this->l('Product feeds');
-        $this->description = $this->l('Publishes your catalogue for Google Merchant Center, Microsoft Merchant Center, Meta and Pinterest, updated as soon as a product changes.');
+        $this->description = $this->l('Publishes your catalogue for Google Merchant Center, Microsoft Merchant Center, Meta, Pinterest and TikTok, updated as soon as a product changes.');
         $this->confirmUninstall = $this->l('Remove the module? The feed addresses will stop working and the platforms will no longer receive your products.');
     }
 
@@ -163,7 +164,7 @@ class ProductFeed extends Module
      */
     public function buildFeed($idShop)
     {
-        $builder = new ProductFeedBuilder($idShop);
+        $builder = new ProductFeedBuilder($idShop, $this->store()->directory());
 
         return $builder->build();
     }
@@ -598,10 +599,22 @@ class ProductFeed extends Module
             }
         }
 
+        // Only filled product fields are submitted (see categories.tpl), so
+        // that a large catalogue stays below max_input_vars.
+        $productMap = [];
+        $submitted = Tools::getValue('pf_product');
+        foreach (is_array($submitted) ? $submitted : [] as $idProduct => $value) {
+            $value = ProductFeedText::plain((string) $value, 255);
+            if ((int) $idProduct > 0 && $value !== '') {
+                $productMap[(int) $idProduct] = $value;
+            }
+        }
+
         $excluded = Tools::getValue('pf_exclude');
         $excluded = is_array($excluded) ? array_keys(array_filter($excluded)) : [];
 
         Configuration::updateValue('PRODUCTFEED_CATEGORY_MAP', json_encode($map, JSON_UNESCAPED_UNICODE));
+        Configuration::updateValue('PRODUCTFEED_PRODUCT_CATEGORY_MAP', json_encode($productMap, JSON_UNESCAPED_UNICODE));
         Configuration::updateValue('PRODUCTFEED_CATEGORY_EXCLUDED', implode(',', ProductFeedConfig::parseIds(implode(',', $excluded))));
     }
 
@@ -721,7 +734,7 @@ class ProductFeed extends Module
                 'type' => 'select',
                 'label' => $this->l('Image size'),
                 'name' => 'PRODUCTFEED_IMAGE_TYPE',
-                'desc' => $this->l('Meta asks for at least 500 × 500 pixels, Microsoft 220 × 220 and Google 100 × 100. The larger the better, as long as the image stays under 8 MB.'),
+                'desc' => $this->l('Meta and TikTok ask for at least 500 × 500 pixels, Microsoft 220 × 220 and Google 100 × 100. The larger the better, as long as the image stays under 8 MB.'),
                 'options' => ['query' => $imageTypes, 'id' => 'id', 'name' => 'name'],
             ],
             [
@@ -857,8 +870,36 @@ class ProductFeed extends Module
             ];
         }
 
+        $productMap = $config->productCategoryMap();
+        $productRows = Db::getInstance()->executeS(
+            'SELECT p.`id_product`, ps.`id_category_default`, pl.`name`
+            FROM `' . _DB_PREFIX_ . 'product` p
+            INNER JOIN `' . _DB_PREFIX_ . 'product_shop` ps
+                ON (ps.`id_product` = p.`id_product` AND ps.`id_shop` = ' . (int) $idShop . ')
+            LEFT JOIN `' . _DB_PREFIX_ . 'product_lang` pl
+                ON (pl.`id_product` = p.`id_product` AND pl.`id_lang` = ' . (int) $idLang . ' AND pl.`id_shop` = ' . (int) $idShop . ')
+            WHERE ps.`active` = 1 AND p.`state` = ' . (int) Product::STATE_SAVED . '
+            ORDER BY pl.`name` ASC'
+        ) ?: [];
+
+        $categoryNames = array_column($categories, 'name', 'id');
+        $products = [];
+        foreach ($productRows as $row) {
+            $id = (int) $row['id_product'];
+            $idCategory = (int) $row['id_category_default'];
+            $products[] = [
+                'id' => $id,
+                'name' => $row['name'],
+                'category' => isset($categoryNames[$idCategory]) ? $categoryNames[$idCategory] : '',
+                'value' => isset($productMap[$id]) ? $productMap[$id] : '',
+                'inherited' => isset($inherited[$idCategory]) ? $inherited[$idCategory] : '',
+            ];
+        }
+
         $this->context->smarty->assign([
             'pf_categories' => $categories,
+            'pf_products' => $products,
+            'pf_product_overrides' => count($productMap),
             'pf_form_action' => $this->configureUrl(),
         ]);
 
@@ -880,7 +921,7 @@ class ProductFeed extends Module
             'out_of_stock' => $this->l('Out of stock'),
             'error' => $this->l('Error while reading the product'),
             'no_category' => $this->l('No Google category'),
-            'no_brand' => $this->l('No brand: Meta rejects the product, Google and Microsoft show it less'),
+            'no_brand' => $this->l('No brand: Meta and TikTok reject the product, Google and Microsoft show it less'),
             'invalid_gtin' => $this->l('Barcode rejected (wrong length, check digit or reserved range)'),
             'no_identifier' => $this->l('No barcode, nor brand and MPN: sent as a product without identifier'),
         ];
@@ -909,6 +950,10 @@ class ProductFeed extends Module
             ProductFeedChannel::PINTEREST => [
                 'name' => 'Pinterest',
                 'help' => $this->l('Ads, Catalogues, Add data source: enter the address.'),
+            ],
+            ProductFeedChannel::TIKTOK => [
+                'name' => 'TikTok',
+                'help' => $this->l('TikTok Ads Manager, Catalogues, Add products, Data feed schedule. The file is in CSV, as TikTok requires; categories are sent as English paths of three levels.'),
             ],
         ];
     }

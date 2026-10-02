@@ -1,6 +1,6 @@
 <?php
 /**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -64,6 +64,12 @@ class ProductFeedBuilder
     /** @var array<int, string> */
     private $categoryMap;
 
+    /** @var array<int, string> */
+    private $productCategoryMap;
+
+    /** @var string */
+    private $directory;
+
     /** @var array<int, true> */
     private $excludedCategories;
 
@@ -78,10 +84,12 @@ class ProductFeedBuilder
 
     /**
      * @param int $idShop
+     * @param string $directory folder of the generated files, for the taxonomy cache
      */
-    public function __construct($idShop)
+    public function __construct($idShop, $directory)
     {
         $this->idShop = (int) $idShop;
+        $this->directory = $directory;
         $this->config = new ProductFeedConfig($this->idShop);
     }
 
@@ -135,13 +143,15 @@ class ProductFeedBuilder
         $this->report['currency'] = $this->currency->iso_code;
 
         $country = Country::getIsoById((int) Configuration::get('PS_COUNTRY_DEFAULT', null, null, $this->idShop));
+        $taxonomy = new ProductFeedTaxonomy($this->directory);
         $files = [];
         foreach (ProductFeedChannel::all() as $channel) {
             list($files[$channel], $this->report['columns'][$channel]) = ProductFeedChannel::render(
                 $channel,
                 $rows,
                 $this->currency->iso_code,
-                $country
+                $country,
+                $taxonomy
             );
         }
 
@@ -194,13 +204,13 @@ class ProductFeedBuilder
             'name' => $name,
             'description' => $this->description($product, $name),
             'brand' => $this->brand($product),
-            'category' => $category['taxonomy'],
+            'category' => isset($this->productCategoryMap[$idProduct]) ? $this->productCategoryMap[$idProduct] : $category['taxonomy'],
             'product_type' => $category['path'],
             'condition' => in_array($product->condition, ['new', 'used', 'refurbished'], true) ? $product->condition : 'new',
             'images' => $this->productImages($idProduct),
         ];
 
-        if ($category['taxonomy'] === '') {
+        if ($shared['category'] === '') {
             $this->note('warnings', 'no_category', $idProduct, $name);
         }
         if ($shared['brand'] === '') {
@@ -697,6 +707,7 @@ class ProductFeedBuilder
     private function loadSettings()
     {
         $this->categoryMap = $this->config->categoryMap();
+        $this->productCategoryMap = $this->config->productCategoryMap();
         $this->excludedCategories = $this->config->excludedCategories();
         $this->excludedProducts = $this->config->excludedProducts();
         $this->attributeMap = $this->config->attributeMap();

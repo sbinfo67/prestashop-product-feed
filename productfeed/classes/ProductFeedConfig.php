@@ -1,6 +1,6 @@
 <?php
 /**
- * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest, TikTok.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -46,6 +46,7 @@ class ProductFeedConfig
         'PRODUCTFEED_FREE_SHIPPING_FROM' => '',
         'PRODUCTFEED_EXCLUDED_PRODUCTS' => '',
         'PRODUCTFEED_CATEGORY_MAP' => '{}',
+        'PRODUCTFEED_PRODUCT_CATEGORY_MAP' => '{}',
         'PRODUCTFEED_CATEGORY_EXCLUDED' => '',
         'PRODUCTFEED_ATTRIBUTE_MAP' => '{}',
         'PRODUCTFEED_GOOGLE_NO_LOCAL' => '0',
@@ -196,6 +197,24 @@ class ProductFeedConfig
             $value = trim((string) $value);
             if ((int) $idCategory > 0 && $value !== '') {
                 $map[(int) $idCategory] = $value;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Product ID to Google product category, overriding its category's.
+     *
+     * @return array<int, string>
+     */
+    public function productCategoryMap()
+    {
+        $map = [];
+        foreach (self::decodeMap($this->get('PRODUCTFEED_PRODUCT_CATEGORY_MAP')) as $idProduct => $value) {
+            $value = trim((string) $value);
+            if ((int) $idProduct > 0 && $value !== '') {
+                $map[(int) $idProduct] = $value;
             }
         }
 
