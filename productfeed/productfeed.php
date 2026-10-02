@@ -80,7 +80,7 @@ class ProductFeed extends Module
     {
         $this->name = 'productfeed';
         $this->tab = 'advertising_marketing';
-        $this->version = '2.1.0';
+        $this->version = '2.1.1';
         $this->author = 'SBINFO';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -963,7 +963,8 @@ class ProductFeed extends Module
      */
     private function configureUrl()
     {
-        return $this->context->link->getAdminLink('AdminModules', true, [], ['configure' => $this->name]);
+        // The address HelperForm posts to on this page.
+        return AdminController::$currentIndex . '&configure=' . $this->name . '&token=' . Tools::getAdminTokenLite('AdminModules');
     }
 
     /**

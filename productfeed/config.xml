@@ -2,7 +2,7 @@
 <module>
   <name>productfeed</name>
   <displayName><![CDATA[Product feeds]]></displayName>
-  <version><![CDATA[2.1.0]]></version>
+  <version><![CDATA[2.1.1]]></version>
   <description><![CDATA[Publishes your catalogue for Google Merchant Center, Microsoft Merchant Center, Meta, Pinterest and TikTok, updated as soon as a product changes.]]></description>
   <author><![CDATA[SBINFO]]></author>
   <tab><![CDATA[advertising_marketing]]></tab>

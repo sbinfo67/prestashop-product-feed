@@ -133,13 +133,19 @@
         {/if}
     {/if}
 
-    <form method="post" action="{$pf_form_action|escape:'html':'UTF-8'}" style="margin-top: 20px;">
-        <button type="submit" name="submitMsAdsFeedRebuild" class="btn btn-default">
+    {* Each action has its own form and a hidden field naming it, as in
+       HelperForm: the action is recognised even if the button is not sent. *}
+    <form method="post" action="{$pf_form_action|escape:'html':'UTF-8'}" style="margin-top: 20px; display: inline-block;">
+        <input type="hidden" name="submitProductFeedRebuild" value="1">
+        <button type="submit" class="btn btn-default">
             <i class="icon-refresh"></i> {l s='Regenerate now' mod='productfeed'}
         </button>
-        <button type="submit" name="submitMsAdsFeedRenewToken" class="btn btn-default"
-                data-confirm="{l s='The current addresses will stop working, the former Microsoft one included. You will have to paste the new ones on every platform. Continue?' mod='productfeed'}"
-                onclick="return confirm(this.getAttribute('data-confirm'));">
+    </form>
+    <form method="post" action="{$pf_form_action|escape:'html':'UTF-8'}" style="margin-top: 20px; display: inline-block;"
+          data-confirm="{l s='The current addresses will stop working, the former Microsoft one included. You will have to paste the new ones on every platform. Continue?' mod='productfeed'}"
+          onsubmit="return confirm(this.getAttribute('data-confirm'));">
+        <input type="hidden" name="submitProductFeedRenewToken" value="1">
+        <button type="submit" class="btn btn-default">
             <i class="icon-key"></i> {l s='Change the addresses' mod='productfeed'}
         </button>
     </form>

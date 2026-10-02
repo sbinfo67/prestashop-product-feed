@@ -7,6 +7,7 @@
  *}
 <form method="post" action="{$pf_form_action|escape:'html':'UTF-8'}" class="form-horizontal"
       onsubmit="var f = this.querySelectorAll('input[data-pf-product]'); for (var i = 0; i < f.length; i++) { if (f[i].value.trim() === '' && f[i].defaultValue === '') { f[i].disabled = true; } }">
+    <input type="hidden" name="submitProductFeedCategories" value="1">
     <div class="panel">
         <div class="panel-heading">
             <i class="icon-sitemap"></i> {l s='Categories' mod='productfeed'}
@@ -94,7 +95,7 @@
         </details>
 
         <div class="panel-footer">
-            <button type="submit" name="submitMsAdsFeedCategories" class="btn btn-default pull-right">
+            <button type="submit" class="btn btn-default pull-right">
                 <i class="process-icon-save"></i> {l s='Save' mod='productfeed'}
             </button>
         </div>
