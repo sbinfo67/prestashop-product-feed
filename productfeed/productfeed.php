@@ -17,6 +17,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once __DIR__ . '/classes/ProductFeedConfig.php';
 require_once __DIR__ . '/classes/ProductFeedText.php';
+require_once __DIR__ . '/classes/ProductFeedUnit.php';
 require_once __DIR__ . '/classes/ProductFeedChannel.php';
 require_once __DIR__ . '/classes/ProductFeedTaxonomy.php';
 require_once __DIR__ . '/classes/ProductFeedStore.php';
@@ -80,7 +81,7 @@ class ProductFeed extends Module
     {
         $this->name = 'productfeed';
         $this->tab = 'advertising_marketing';
-        $this->version = '2.1.2';
+        $this->version = '2.2.0';
         $this->author = 'SBINFO';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -924,6 +925,8 @@ class ProductFeed extends Module
             'no_brand' => $this->l('No brand: Meta and TikTok reject the product, Google and Microsoft show it less'),
             'invalid_gtin' => $this->l('Barcode rejected (wrong length, check digit or reserved range)'),
             'no_identifier' => $this->l('No barcode, nor brand and MPN: sent as a product without identifier'),
+            'unknown_unit' => $this->l('Unit price not sent: unit missing or not recognised (use kg, g, l, ml or unit)'),
+            'unit_price_mismatch' => $this->l('Unit price to check: it gives the quantity shown, the price may have changed without it'),
         ];
     }
 

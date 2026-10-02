@@ -60,6 +60,7 @@ quelques détails de forme diffèrent, selon la spécification de chacune :
 | Prix réduit | `11.82 EUR` | `11.82` | `11.82 EUR` | `11.82 EUR` | `11.82 EUR` |
 | Frais de port | `FR:::6.90 EUR` | `6.90` | `FR:::6.90 EUR` | `FR:::6.90 EUR` | absents |
 | `identifier_exists` | `yes` / `no` | `TRUE` / `FALSE` | absent | absent | absent |
+| Prix unitaire | `250g`, `1kg` | `250g`, `1kg` | absent | absent | absent |
 | Description | 5 000 caractères | 10 000 | 9 999 | 10 000 | 5 000 |
 
 Une même taxonomie sert à tous : celle de Google. Saisissez de préférence des
@@ -103,6 +104,7 @@ déclinaison.
 | catégorie | Catégorie Google associée à la catégorie du produit |
 | `product_type` | Fil d'Ariane de la catégorie par défaut |
 | `color`, `size`, `material`, `pattern` | Attributs de la déclinaison, selon vos réglages |
+| `unit_pricing_measure`, `unit_pricing_base_measure` | Quantité vendue et quantité de référence, déduites du prix unitaire (Google, Microsoft) |
 | `shipping` | Frais de port, si vous les renseignez |
 | `excluded_destination` | Google seulement, si l'option « pas de fiches locales » est active |
 | `availability`, `availability_date` | En stock, épuisé ou en précommande, avec la date de sortie pour Google |
@@ -115,7 +117,29 @@ pour tous les produits sont omises.
 Ne sont pas envoyés : les produits désactivés ou invisibles, ceux qui ne sont
 pas disponibles à la commande, ceux sans image ou à prix nul, et ceux que vous
 excluez. La page de configuration les liste avec la raison, ainsi que les
-produits sans catégorie, sans marque ou sans identifiant.
+produits sans catégorie, sans marque, sans identifiant ou dont le prix
+unitaire pose problème.
+
+## Prix au kilo ou au litre
+
+Dans l'Union européenne, Google signale « Mesure de prix unitaire manquante »
+pour les produits vendus au poids ou au volume. Le module envoie cette mesure
+dès que la fiche produit a un prix unitaire, dans l'onglet Prix :
+
+1. **Prix unitaire** : le prix au kilo, au litre ou à la pièce, par exemple
+   396 € pour un pot de 250 g à 99 € ;
+2. **Unité** : `le kg`, `le litre`, `100 g`, `la pièce`… Le module reconnaît
+   mg, g, kg, ml, cl, l, cm, m, m² et l'unité (pièce, gélule, sachet).
+
+Pour une déclinaison dont le prix au kilo diffère (un pot de 500 g et un de
+250 g), renseignez aussi son « impact sur le prix unitaire ». Le module en
+déduit la quantité vendue (`250g`) et la quantité de référence (`1kg`) avec le
+calcul de la fiche produit : le prix au kilo que Google affiche est celui de
+votre page. Pour l'instant seuls Google et Microsoft ont une colonne pour cela.
+
+PrestaShop ne recalcule pas le prix unitaire quand le prix change. Si la
+quantité qui en découle n'est plus ronde (265,15 g au lieu de 250 g), la page
+de configuration le signale : mettez le prix unitaire à jour.
 
 ## Catégories
 
@@ -234,7 +258,7 @@ besoin avant de les envoyer.
 
 ## Limites
 
-- Le prix à l'unité de mesure (prix au kilo) n'est pas transmis.
+- Le prix au kilo n'est envoyé qu'à Google et Microsoft.
 - Les frais de port se limitent à un forfait avec seuil de gratuité ; sinon,
   laissez chaque plateforme appliquer ses propres réglages de livraison.
 - Pas d'inventaire de magasin physique (fiches locales Google).

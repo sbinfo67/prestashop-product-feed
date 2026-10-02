@@ -292,6 +292,8 @@ class ProductFeedBuilder
             return null;
         }
 
+        $unitPricing = $this->unitPricing($product, $combination, $label);
+
         $source = $combination === null ? [
             'ean13' => $product->ean13,
             'isbn' => $product->isbn,
@@ -366,6 +368,8 @@ class ProductFeedBuilder
             'size' => $variant['size'],
             'material' => $variant['material'],
             'pattern' => $variant['pattern'],
+            'unit_pricing_measure' => $unitPricing['measure'],
+            'unit_pricing_base_measure' => $unitPricing['base'],
             'shipping' => $this->shipping($product, $final),
             'availability' => $availability,
             'availability_date' => $availability === 'preorder' ? $this->availableDate($product, $combination) : '',
@@ -405,6 +409,39 @@ class ProductFeedBuilder
         );
 
         return (float) Tools::ps_round((float) $price, 2);
+    }
+
+    /**
+     * Quantity sold and quantity the unit price refers to, from the unit
+     * price entered in PrestaShop, with the ratio the product page uses
+     * (Product::computeUnitPriceRatio): prices before discounts, tax excluded.
+     *
+     * @param Product $product
+     * @param array|null $combination
+     * @param string $label
+     *
+     * @return array<string, string> measure and base, empty without a unit price
+     */
+    private function unitPricing(Product $product, $combination, $label)
+    {
+        $none = ['measure' => '', 'base' => ''];
+        $unitPrice = (float) $product->unit_price + ($combination !== null ? (float) $combination['unit_price_impact'] : 0.0);
+        if ($unitPrice <= 0) {
+            return $none;
+        }
+
+        $price = (float) $product->price + ($combination !== null ? (float) $combination['price'] : 0.0);
+        $measures = ProductFeedUnit::measures($price, $unitPrice, (string) $product->unity);
+        if ($measures === null) {
+            $this->note('warnings', 'unknown_unit', (int) $product->id, $label, (string) $product->unity);
+
+            return $none;
+        }
+        if (!$measures['exact']) {
+            $this->note('warnings', 'unit_price_mismatch', (int) $product->id, $label, $measures['measure']);
+        }
+
+        return $measures;
     }
 
     /**
@@ -664,7 +701,7 @@ class ProductFeedBuilder
 
         $rows = Db::getInstance()->executeS(
             'SELECT pa.`id_product_attribute`, pa.`reference`, pa.`ean13`, pa.`isbn`, pa.`upc`, pa.`mpn`,
-                pas.`available_date`, a.`id_attribute_group`, al.`name` AS attribute_name
+                pas.`available_date`, pas.`price`, pas.`unit_price_impact`, a.`id_attribute_group`, al.`name` AS attribute_name
             FROM `' . _DB_PREFIX_ . 'product_attribute` pa
             INNER JOIN `' . _DB_PREFIX_ . 'product_attribute_shop` pas
                 ON (pas.`id_product_attribute` = pa.`id_product_attribute` AND pas.`id_shop` = ' . $this->idShop . ')
@@ -689,6 +726,8 @@ class ProductFeedBuilder
                     'upc' => $row['upc'],
                     'mpn' => $row['mpn'],
                     'available_date' => $row['available_date'],
+                    'price' => $row['price'],
+                    'unit_price_impact' => $row['unit_price_impact'],
                     'attributes' => [],
                 ];
             }

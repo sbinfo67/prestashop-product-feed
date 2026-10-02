@@ -45,6 +45,9 @@ class ProductFeedChannel
      * - meta: developers.facebook.com/docs/marketing-api/catalog/reference
      * - pinterest: help.pinterest.com/business/article/before-you-get-started-with-catalogs
      * - tiktok: ads.tiktok.com/help/article/catalog-product-parameters
+     *
+     * Unit pricing goes to Google and Microsoft, which share its syntax; the
+     * other platforms document no equivalent column for a file.
      */
     const DEFINITIONS = [
         self::GOOGLE => [
@@ -61,6 +64,7 @@ class ProductFeedChannel
             'max_description' => 5000,
             'compact_offsets' => true,
             'local_destinations' => 'Free_local_listings,Local_inventory_ads',
+            'unit_pricing' => true,
         ],
         self::MICROSOFT => [
             'format' => self::FORMAT_TSV,
@@ -76,6 +80,7 @@ class ProductFeedChannel
             'max_description' => 10000,
             'compact_offsets' => false,
             'local_destinations' => null,
+            'unit_pricing' => true,
         ],
         self::META => [
             'format' => self::FORMAT_TSV,
@@ -92,6 +97,7 @@ class ProductFeedChannel
             'max_description' => 9999,
             'compact_offsets' => false,
             'local_destinations' => null,
+            'unit_pricing' => false,
         ],
         self::PINTEREST => [
             'format' => self::FORMAT_TSV,
@@ -107,6 +113,7 @@ class ProductFeedChannel
             'max_description' => 10000,
             'compact_offsets' => false,
             'local_destinations' => null,
+            'unit_pricing' => false,
         ],
         // Scheduled TikTok feeds must be CSV. The category is a path of the
         // English taxonomy, three levels at most; the shipping syntax TikTok
@@ -125,6 +132,7 @@ class ProductFeedChannel
             'max_description' => 5000,
             'compact_offsets' => false,
             'local_destinations' => null,
+            'unit_pricing' => false,
         ],
     ];
 
@@ -135,7 +143,8 @@ class ProductFeedChannel
     const COLUMNS = [
         'id', 'item_group_id', 'title', 'description', 'link', 'image_link', 'additional_image_link',
         'price', 'sale_price', 'sale_price_effective_date', 'brand', 'gtin', 'mpn', 'identifier_exists',
-        '{category}', 'product_type', 'color', 'size', 'material', 'pattern', 'shipping',
+        '{category}', 'product_type', 'color', 'size', 'material', 'pattern',
+        'unit_pricing_measure', 'unit_pricing_base_measure', 'shipping',
         'excluded_destination', 'availability_date', 'availability', 'condition',
     ];
 
@@ -311,6 +320,8 @@ class ProductFeedChannel
             'size' => $offer['size'],
             'material' => $offer['material'],
             'pattern' => $offer['pattern'],
+            'unit_pricing_measure' => $rules['unit_pricing'] ? $offer['unit_pricing_measure'] : '',
+            'unit_pricing_base_measure' => $rules['unit_pricing'] ? $offer['unit_pricing_base_measure'] : '',
             'shipping' => $shipping,
             'excluded_destination' => $offer['without_local'] && $rules['local_destinations'] !== null
                 ? $rules['local_destinations']

@@ -66,6 +66,8 @@ $_MODULE['<{productfeed}prestashop>productfeed_f042347d4681393858585a3fd1dc241e'
 $_MODULE['<{productfeed}prestashop>productfeed_0c837fac52101f6b0f786e174bdef066'] = 'Pas de marque : Meta et TikTok refusent le produit, Google et Microsoft le diffusent moins';
 $_MODULE['<{productfeed}prestashop>productfeed_71b607508706ade3ad943c4a3b8dde49'] = 'Code-barres refusé (longueur, clé de contrôle ou plage réservée)';
 $_MODULE['<{productfeed}prestashop>productfeed_b910359279b3db1b321065501100b134'] = 'Ni code-barres, ni couple marque et MPN : envoyé comme produit sans identifiant';
+$_MODULE['<{productfeed}prestashop>productfeed_381093a9b49ff36357bba0ee39976b47'] = 'Prix unitaire non envoyé : unité absente ou non reconnue (utilisez kg, g, l, ml ou unité)';
+$_MODULE['<{productfeed}prestashop>productfeed_1a2c1ed1b7ebe1d853631d4db2f42b46'] = 'Prix unitaire à vérifier : il donne la quantité indiquée, le prix a peut-être changé sans lui';
 $_MODULE['<{productfeed}prestashop>productfeed_cafa72d1cbe679fbf226eb713ef5db5e'] = 'Sources de données, ajouter une source de produits à partir d\'un fichier, puis saisir le lien. Convient aussi aux autres services qui lisent les flux au format Google Shopping.';
 $_MODULE['<{productfeed}prestashop>productfeed_a37c7825ee451632d86394ff1ccfd71b'] = 'Flux, Créer un flux, méthode « Automatically download file from URL ».';
 $_MODULE['<{productfeed}prestashop>productfeed_b46a98fa98ef0473668fb3c24645c89f'] = 'Commerce Manager, Catalogue, Sources de données, Flux de données, flux planifié.';
