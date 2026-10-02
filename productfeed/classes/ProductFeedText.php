@@ -1,6 +1,6 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -15,7 +15,7 @@ if (!defined('_PS_VERSION_')) {
  * Turns shop data into values Microsoft Merchant Center accepts: plain text
  * on a single line, bounded lengths, valid barcodes, dotted decimals.
  */
-class MicrosoftAdsFeedText
+class ProductFeedText
 {
     /** Tags whose boundaries separate words once the markup is gone. */
     const BLOCK_TAGS = 'br|p|div|li|ul|ol|dl|dt|dd|h[1-6]|tr|td|th|table|thead|tbody|blockquote|section|article|header|footer|hr|pre';

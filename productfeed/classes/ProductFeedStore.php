@@ -1,6 +1,6 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -12,15 +12,15 @@ if (!defined('_PS_VERSION_')) {
 }
 
 /**
- * Keeps the generated file of each shop, knows when it is out of date, and
- * makes sure two requests never write it at the same time.
+ * Keeps the generated files of each shop, one per platform, knows when they
+ * are out of date, and makes sure two requests never write them at once.
  *
  * Every catalogue change stamps a marker file. A feed built after the last
  * stamp is fresh; one built before it is rebuilt at the next occasion. The
  * marker lives on disk rather than in the configuration table so that a
  * request always reads the latest value, not the copy cached at bootstrap.
  */
-class MicrosoftAdsFeedStore
+class ProductFeedStore
 {
     /**
      * Beyond this age the feed is rebuilt even without a recorded change:
@@ -57,14 +57,16 @@ class MicrosoftAdsFeedStore
 
     /**
      * @param int $idShop
+     * @param string $channel
      *
      * @return string
      */
-    public function feedPath($idShop)
+    public function feedPath($idShop, $channel)
     {
         // The token digest keeps the name unguessable on servers that serve
         // module folders without reading their .htaccess.
-        return $this->directory . 'feed-' . (int) $idShop . '-' . substr(sha1(MicrosoftAdsFeedConfig::token()), 0, 12) . '.txt';
+        return $this->directory . 'feed-' . (int) $idShop . '-' . $channel . '-'
+            . substr(sha1(ProductFeedConfig::token()), 0, 12) . '.txt';
     }
 
     /**
@@ -110,16 +112,32 @@ class MicrosoftAdsFeedStore
         $meta = $this->meta($idShop);
 
         return $meta === null
-            || !is_file($this->feedPath($idShop))
+            || !$this->hasAllFiles($idShop)
             || (float) $meta['started_at'] < $this->lastChange()
             || time() - (int) $meta['finished_at'] > self::MAX_AGE;
+    }
+
+    /**
+     * @param int $idShop
+     *
+     * @return bool
+     */
+    private function hasAllFiles($idShop)
+    {
+        foreach (ProductFeedChannel::all() as $channel) {
+            if (!is_file($this->feedPath($idShop, $channel))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
      * Rebuilds the feed unless it is already fresh.
      *
      * @param int $idShop
-     * @param callable $builder receives the shop ID, returns [lines, meta]
+     * @param callable $builder receives the shop ID, returns [lines per platform, meta]
      *
      * @return array meta of the file now on disk
      */
@@ -149,7 +167,7 @@ class MicrosoftAdsFeedStore
     {
         return $this->withLock(function () use ($idShop, $builder, $changesUntil) {
             $meta = $this->meta($idShop);
-            if ($changesUntil !== null && $meta !== null && is_file($this->feedPath($idShop))
+            if ($changesUntil !== null && $meta !== null && $this->hasAllFiles($idShop)
                 && (float) $meta['started_at'] > $changesUntil
             ) {
                 return $meta;
@@ -182,7 +200,10 @@ class MicrosoftAdsFeedStore
             if (substr($file, -5) === '.json') {
                 continue;
             }
-            if (!preg_match('/^feed-(\d+)-/', basename($file), $match) || $file !== $this->feedPath((int) $match[1])) {
+            if (!preg_match('/^feed-(\d+)-([a-z]+)-/', basename($file), $match)
+                || !ProductFeedChannel::exists($match[2])
+                || $file !== $this->feedPath((int) $match[1], $match[2])
+            ) {
                 @unlink($file);
             }
         }
@@ -197,19 +218,22 @@ class MicrosoftAdsFeedStore
     private function write($idShop, callable $builder)
     {
         $startedAt = microtime(true);
-        list($lines, $meta) = $builder($idShop);
+        list($files, $meta) = $builder($idShop);
 
-        $target = $this->feedPath($idShop);
-        $temporary = $target . '.' . getmypid() . '.tmp';
+        $meta['size'] = [];
+        foreach ($files as $channel => $lines) {
+            $target = $this->feedPath($idShop, $channel);
+            $temporary = $target . '.' . getmypid() . '.tmp';
 
-        if (@file_put_contents($temporary, implode("\n", $lines) . "\n") === false || !@rename($temporary, $target)) {
-            @unlink($temporary);
-            throw new PrestaShopException('The feed file could not be written in ' . $this->directory);
+            if (@file_put_contents($temporary, implode("\n", $lines) . "\n") === false || !@rename($temporary, $target)) {
+                @unlink($temporary);
+                throw new PrestaShopException('The feed file could not be written in ' . $this->directory);
+            }
+            $meta['size'][$channel] = filesize($target);
         }
 
         $meta['started_at'] = $startedAt;
         $meta['finished_at'] = time();
-        $meta['size'] = filesize($target);
         @file_put_contents($this->metaPath($idShop), json_encode($meta), LOCK_EX);
 
         $this->purgeObsolete();

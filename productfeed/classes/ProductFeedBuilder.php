@@ -1,6 +1,6 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -12,28 +12,14 @@ if (!defined('_PS_VERSION_')) {
 }
 
 /**
- * Reads the catalogue of one shop and produces the lines of the
- * tab-separated file Microsoft Merchant Center downloads.
+ * Reads the catalogue of one shop and produces one tab-separated file per
+ * platform (see ProductFeedChannel).
  *
  * Prices are computed the way the product page computes them for a visitor
- * who is not logged in, because Microsoft compares both.
+ * who is not logged in, because the platforms compare both.
  */
-class MicrosoftAdsFeedBuilder
+class ProductFeedBuilder
 {
-    /**
-     * Column order. The two columns that always hold a value come last, so
-     * a line never ends with a tab, which Microsoft rejects.
-     */
-    const COLUMNS = [
-        'id', 'item_group_id', 'title', 'description', 'link', 'image_link', 'additional_image_link',
-        'price', 'sale_price', 'sale_price_effective_date', 'brand', 'gtin', 'mpn', 'identifier_exists',
-        'product_category', 'product_type', 'color', 'size', 'material', 'pattern', 'shipping',
-        'availability', 'condition',
-    ];
-
-    /** Columns written even when every value is empty. */
-    const REQUIRED = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'condition'];
-
     const MAX_TITLE = 150;
     const MAX_DESCRIPTION = 10000;
     const MAX_BRAND = 70;
@@ -48,7 +34,7 @@ class MicrosoftAdsFeedBuilder
     /** @var int */
     private $idShop;
 
-    /** @var MicrosoftAdsFeedConfig */
+    /** @var ProductFeedConfig */
     private $config;
 
     /** @var int */
@@ -96,11 +82,11 @@ class MicrosoftAdsFeedBuilder
     public function __construct($idShop)
     {
         $this->idShop = (int) $idShop;
-        $this->config = new MicrosoftAdsFeedConfig($this->idShop);
+        $this->config = new ProductFeedConfig($this->idShop);
     }
 
     /**
-     * @return array [lines of the file, summary for the back office]
+     * @return array [lines of each platform's file, summary for the back office]
      */
     public function build()
     {
@@ -145,35 +131,21 @@ class MicrosoftAdsFeedBuilder
         }
 
         $this->report['offers'] = count($rows);
-
-        $columns = [];
-        foreach (self::COLUMNS as $column) {
-            if (in_array($column, self::REQUIRED, true)) {
-                $columns[] = $column;
-                continue;
-            }
-            foreach ($rows as $row) {
-                if ($row[$column] !== '') {
-                    $columns[] = $column;
-                    break;
-                }
-            }
-        }
-
-        $lines = [implode("\t", $columns)];
-        foreach ($rows as $row) {
-            $cells = [];
-            foreach ($columns as $column) {
-                $cells[] = $row[$column];
-            }
-            $lines[] = implode("\t", $cells);
-        }
-
-        $this->report['columns'] = $columns;
         $this->report['language'] = Language::getIsoById($this->idLang);
         $this->report['currency'] = $this->currency->iso_code;
 
-        return [$lines, $this->report];
+        $country = Country::getIsoById((int) Configuration::get('PS_COUNTRY_DEFAULT', null, null, $this->idShop));
+        $files = [];
+        foreach (ProductFeedChannel::all() as $channel) {
+            list($files[$channel], $this->report['columns'][$channel]) = ProductFeedChannel::render(
+                $channel,
+                $rows,
+                $this->currency->iso_code,
+                $country
+            );
+        }
+
+        return [$files, $this->report];
     }
 
     /**
@@ -205,7 +177,7 @@ class MicrosoftAdsFeedBuilder
             return [];
         }
 
-        $name = MicrosoftAdsFeedText::plain($product->name, self::MAX_TITLE);
+        $name = ProductFeedText::plain($product->name, self::MAX_TITLE);
         if ($name === '') {
             $this->note('skipped', 'no_name', $idProduct);
 
@@ -222,7 +194,7 @@ class MicrosoftAdsFeedBuilder
             'name' => $name,
             'description' => $this->description($product, $name),
             'brand' => $this->brand($product),
-            'product_category' => $category['taxonomy'],
+            'category' => $category['taxonomy'],
             'product_type' => $category['path'],
             'condition' => in_array($product->condition, ['new', 'used', 'refurbished'], true) ? $product->condition : 'new',
             'images' => $this->productImages($idProduct),
@@ -230,6 +202,9 @@ class MicrosoftAdsFeedBuilder
 
         if ($category['taxonomy'] === '') {
             $this->note('warnings', 'no_category', $idProduct, $name);
+        }
+        if ($shared['brand'] === '') {
+            $this->note('warnings', 'no_brand', $idProduct, $name);
         }
 
         $combinations = $this->config->exportCombinations() ? $this->combinations($idProduct) : [];
@@ -274,11 +249,11 @@ class MicrosoftAdsFeedBuilder
         if ($combination !== null) {
             $names = array_column($combination['attributes'], 'name');
             if (!empty($names)) {
-                $suffix = MicrosoftAdsFeedText::truncate(' - ' . implode(', ', $names), (int) (self::MAX_TITLE / 2));
+                $suffix = ProductFeedText::truncate(' - ' . implode(', ', $names), (int) (self::MAX_TITLE / 2));
             }
         }
         // The name gives way first, so two combinations never share a title.
-        $title = MicrosoftAdsFeedText::truncate($shared['name'], self::MAX_TITLE - mb_strlen($suffix)) . $suffix;
+        $title = ProductFeedText::truncate($shared['name'], self::MAX_TITLE - mb_strlen($suffix)) . $suffix;
         $label = $shared['name'] . $suffix;
 
         // Null lets PrestaShop pick the default combination, as the product
@@ -321,7 +296,7 @@ class MicrosoftAdsFeedBuilder
             if ($candidate === '') {
                 continue;
             }
-            $gtin = MicrosoftAdsFeedText::gtin($candidate);
+            $gtin = ProductFeedText::gtin($candidate);
             if ($gtin === '') {
                 $this->note('warnings', 'invalid_gtin', $idProduct, $label, $candidate);
             }
@@ -332,7 +307,7 @@ class MicrosoftAdsFeedBuilder
         if ($mpn === '' && $this->config->referenceAsMpn()) {
             $mpn = trim((string) $source['reference']);
         }
-        $mpn = MicrosoftAdsFeedText::plain($mpn, self::MAX_MPN);
+        $mpn = ProductFeedText::plain($mpn, self::MAX_MPN);
 
         $identified = $gtin !== '' || ($mpn !== '' && $shared['brand'] !== '');
         if (!$identified) {
@@ -340,18 +315,18 @@ class MicrosoftAdsFeedBuilder
             $this->note('warnings', 'no_identifier', $idProduct, $label);
         }
 
-        $salePrice = '';
+        $salePrice = null;
         $saleWindow = '';
         if ($final < $regular - 0.005) {
-            $salePrice = MicrosoftAdsFeedText::amount($final);
+            $salePrice = $final;
             if (is_array($specificPrice) && isset($specificPrice['from'], $specificPrice['to'])) {
-                $saleWindow = MicrosoftAdsFeedText::saleWindow($specificPrice['from'], $specificPrice['to'], $this->timezone);
+                $saleWindow = ProductFeedText::saleWindow($specificPrice['from'], $specificPrice['to'], $this->timezone);
             }
         }
 
         $imageUrls = [];
         foreach (array_slice($images, 0, self::MAX_ADDITIONAL_IMAGES + 1) as $idImage) {
-            $imageUrls[] = MicrosoftAdsFeedText::url(
+            $imageUrls[] = ProductFeedText::url(
                 $this->link->getImageLink($product->link_rewrite, (int) $idImage, $this->imageType)
             );
         }
@@ -365,17 +340,17 @@ class MicrosoftAdsFeedBuilder
             'item_group_id' => $combination !== null && !empty(array_filter($variant)) ? (string) $idProduct : '',
             'title' => $title,
             'description' => $shared['description'],
-            'link' => MicrosoftAdsFeedText::url($link),
+            'link' => ProductFeedText::url($link),
             'image_link' => array_shift($imageUrls),
             'additional_image_link' => implode(',', $imageUrls),
-            'price' => MicrosoftAdsFeedText::amount($regular) . ' ' . $this->currency->iso_code,
+            'price' => $regular,
             'sale_price' => $salePrice,
             'sale_price_effective_date' => $saleWindow,
             'brand' => $shared['brand'],
             'gtin' => $gtin,
             'mpn' => $mpn,
-            'identifier_exists' => $identified ? 'TRUE' : 'FALSE',
-            'product_category' => $shared['product_category'],
+            'identified' => $identified,
+            'category' => $shared['category'],
             'product_type' => $shared['product_type'],
             'color' => $variant['color'],
             'size' => $variant['size'],
@@ -383,6 +358,8 @@ class MicrosoftAdsFeedBuilder
             'pattern' => $variant['pattern'],
             'shipping' => $this->shipping($product, $final),
             'availability' => $availability,
+            'availability_date' => $availability === 'preorder' ? $this->availableDate($product, $combination) : '',
+            'without_local' => $this->config->googleWithoutLocal(),
             'condition' => $shared['condition'],
         ];
     }
@@ -446,33 +423,46 @@ class MicrosoftAdsFeedBuilder
 
         // Orders are accepted while out of stock: a release date still to
         // come makes it a preorder, otherwise the shop keeps selling.
-        $availableDate = $combination !== null ? (string) $combination['available_date'] : (string) $product->available_date;
-        if ($availableDate !== '' && strpos($availableDate, '0000-00-00') !== 0 && $availableDate > date('Y-m-d')) {
-            return 'preorder';
+        return $this->availableDate($product, $combination) !== '' ? 'preorder' : 'in stock';
+    }
+
+    /**
+     * Release date still to come, in ISO 8601, or an empty string.
+     *
+     * @param Product $product
+     * @param array|null $combination
+     *
+     * @return string
+     */
+    private function availableDate(Product $product, $combination)
+    {
+        $date = $combination !== null ? (string) $combination['available_date'] : (string) $product->available_date;
+        if ($date === '' || strpos($date, '0000-00-00') === 0 || $date <= date('Y-m-d')) {
+            return '';
         }
 
-        return 'in stock';
+        return (new DateTime($date, $this->timezone))->format('Y-m-d\TH:iP');
     }
 
     /**
      * @param Product $product
      * @param float $price
      *
-     * @return string
+     * @return float|null null when no shipping cost is configured
      */
     private function shipping(Product $product, $price)
     {
         $cost = $this->config->shippingCost();
         if ($cost === null) {
-            return '';
+            return null;
         }
 
         $freeFrom = $this->config->freeShippingFrom();
         if ($product->is_virtual || ($freeFrom !== null && $price >= $freeFrom)) {
-            $cost = 0.0;
+            return 0.0;
         }
 
-        return MicrosoftAdsFeedText::amount($cost);
+        return $cost;
     }
 
     /**
@@ -489,7 +479,7 @@ class MicrosoftAdsFeedBuilder
         }
 
         foreach ($sources as $source) {
-            $text = MicrosoftAdsFeedText::plain((string) $source, self::MAX_DESCRIPTION);
+            $text = ProductFeedText::plain((string) $source, self::MAX_DESCRIPTION);
             if ($text !== '') {
                 return $text;
             }
@@ -510,7 +500,7 @@ class MicrosoftAdsFeedBuilder
             $brand = $this->config->defaultBrand();
         }
 
-        return MicrosoftAdsFeedText::plain($brand, self::MAX_BRAND);
+        return ProductFeedText::plain($brand, self::MAX_BRAND);
     }
 
     /**
@@ -520,7 +510,7 @@ class MicrosoftAdsFeedBuilder
      */
     private function variantValues($combination)
     {
-        $values = array_fill_keys(MicrosoftAdsFeedConfig::VARIANT_FIELDS, []);
+        $values = array_fill_keys(ProductFeedConfig::VARIANT_FIELDS, []);
 
         if ($combination !== null) {
             foreach ($combination['attributes'] as $attribute) {
@@ -536,7 +526,7 @@ class MicrosoftAdsFeedBuilder
             // Microsoft reads up to three colours or materials split by slashes.
             $list = in_array($field, ['color', 'material'], true) ? array_slice($list, 0, 3) : $list;
             $separator = in_array($field, ['color', 'material'], true) ? '/' : ' ';
-            $result[$field] = MicrosoftAdsFeedText::truncate(implode($separator, array_filter($list)), self::MAX_VARIANT);
+            $result[$field] = ProductFeedText::truncate(implode($separator, array_filter($list)), self::MAX_VARIANT);
         }
 
         return $result;
@@ -583,7 +573,7 @@ class MicrosoftAdsFeedBuilder
         return $this->categoryCache[$idCategory] = [
             'taxonomy' => $taxonomy,
             'excluded' => $excluded,
-            'path' => MicrosoftAdsFeedText::truncate(implode(' > ', array_reverse($names)), self::MAX_PRODUCT_TYPE),
+            'path' => ProductFeedText::truncate(implode(' > ', array_reverse($names)), self::MAX_PRODUCT_TYPE),
         ];
     }
 
@@ -692,7 +682,7 @@ class MicrosoftAdsFeedBuilder
                     'attributes' => [],
                 ];
             }
-            $attributeName = MicrosoftAdsFeedText::plain((string) $row['attribute_name'], self::MAX_VARIANT);
+            $attributeName = ProductFeedText::plain((string) $row['attribute_name'], self::MAX_VARIANT);
             if ($row['id_attribute_group'] !== null && $attributeName !== '') {
                 $combinations[$id]['attributes'][] = [
                     'group' => (int) $row['id_attribute_group'],
@@ -737,7 +727,7 @@ class MicrosoftAdsFeedBuilder
             $this->categories[(int) $row['id_category']] = [
                 'id_parent' => (int) $row['id_parent'],
                 'is_root_category' => (bool) $row['is_root_category'],
-                'name' => MicrosoftAdsFeedText::plain((string) $row['name'], 200),
+                'name' => ProductFeedText::plain((string) $row['name'], 200),
             ];
         }
     }
@@ -764,7 +754,7 @@ class MicrosoftAdsFeedBuilder
                 'reason' => $reason,
                 'id_product' => (int) $idProduct,
                 'label' => $label,
-                'detail' => MicrosoftAdsFeedText::truncate((string) $detail, 200),
+                'detail' => ProductFeedText::truncate((string) $detail, 200),
             ];
         }
     }

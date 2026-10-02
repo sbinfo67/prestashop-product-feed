@@ -1,6 +1,6 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -12,23 +12,23 @@ if (!defined('_PS_VERSION_')) {
 }
 
 /**
- * The address Microsoft Merchant Center downloads. Serves the stored file,
- * after rebuilding it if the catalogue changed since the last build.
+ * The address each platform downloads. Serves the stored file of that
+ * platform, after rebuilding the files if the catalogue changed since.
  */
-class MicrosoftAdsFeedFeedModuleFrontController extends ModuleFrontController
+class ProductFeedFeedModuleFrontController extends ModuleFrontController
 {
-    /** @var MicrosoftAdsFeed */
+    /** @var ProductFeed */
     public $module;
 
     /**
-     * Microsoft keeps downloading while the shop is in maintenance.
+     * The platforms keep downloading while the shop is in maintenance.
      */
     protected function displayMaintenancePage()
     {
     }
 
     /**
-     * Microsoft downloads from abroad; geolocation must not turn it away.
+     * The platforms download from abroad; geolocation must not turn them away.
      */
     protected function displayRestrictedCountryPage()
     {
@@ -36,18 +36,21 @@ class MicrosoftAdsFeedFeedModuleFrontController extends ModuleFrontController
 
     public function postProcess()
     {
-        if (!MicrosoftAdsFeedConfig::isValidToken(Tools::getValue('token'))) {
+        // The address of the Microsoft-only module that preceded this one
+        // carries no platform: it keeps serving the Microsoft dialect.
+        $channel = (string) Tools::getValue('channel', ProductFeedChannel::MICROSOFT);
+        if (!ProductFeedConfig::isValidToken(Tools::getValue('token')) || !ProductFeedChannel::exists($channel)) {
             $this->respond(404, "Not found\n");
         }
 
         $idShop = (int) $this->context->shop->id;
-        $path = $this->module->store()->feedPath($idShop);
+        $path = $this->module->store()->feedPath($idShop, $channel);
 
         try {
             $this->module->ensureFeed($idShop);
         } catch (Throwable $e) {
-            PrestaShopLogger::addLog('Microsoft Ads feed: ' . $e->getMessage(), 3, null, 'Module', (int) $this->module->id);
-            // An older file is better than no file: Microsoft would
+            PrestaShopLogger::addLog('Product feed: ' . $e->getMessage(), 3, null, 'Module', (int) $this->module->id);
+            // An older file is better than no file: the platform would
             // otherwise report every product as missing.
             if (!is_file($path)) {
                 $this->respond(503, "Feed temporarily unavailable\n");
@@ -60,7 +63,7 @@ class MicrosoftAdsFeedFeedModuleFrontController extends ModuleFrontController
 
         clearstatcache(true, $path);
         header('Content-Type: text/plain; charset=utf-8');
-        header('Content-Disposition: inline; filename="microsoft-ads-feed.txt"');
+        header('Content-Disposition: inline; filename="products-' . $channel . '.txt"');
         header('Content-Length: ' . filesize($path));
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', filemtime($path)) . ' GMT');
         header('Cache-Control: no-store, max-age=0');

@@ -2,7 +2,7 @@
 # Builds the installable archive expected by the PrestaShop module manager.
 set -euo pipefail
 
-MODULE="microsoftadsfeed"
+MODULE="productfeed"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST="$ROOT/dist"
 

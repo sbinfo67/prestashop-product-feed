@@ -1,9 +1,10 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
- * Publishes the catalogue as the tab-separated file Microsoft Merchant
- * Center downloads, and keeps it in step with every product change.
+ * Publishes the catalogue as the tab-separated files Google Merchant Center,
+ * Microsoft Merchant Center, Meta and Pinterest download, and keeps them in
+ * step with every product change.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -14,15 +15,22 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once __DIR__ . '/classes/MicrosoftAdsFeedConfig.php';
-require_once __DIR__ . '/classes/MicrosoftAdsFeedText.php';
-require_once __DIR__ . '/classes/MicrosoftAdsFeedStore.php';
-require_once __DIR__ . '/classes/MicrosoftAdsFeedBuilder.php';
+require_once __DIR__ . '/classes/ProductFeedConfig.php';
+require_once __DIR__ . '/classes/ProductFeedText.php';
+require_once __DIR__ . '/classes/ProductFeedChannel.php';
+require_once __DIR__ . '/classes/ProductFeedStore.php';
+require_once __DIR__ . '/classes/ProductFeedBuilder.php';
 
-class MicrosoftAdsFeed extends Module
+class ProductFeed extends Module
 {
-    /** Address of the feed, relative to the shop root. */
-    const ROUTE_RULE = 'microsoft-ads-feed/{token}';
+    /** Address of a platform's feed, relative to the shop root. */
+    const ROUTE_RULE = 'product-feed/{channel}/{token}';
+
+    /**
+     * Address used by the Microsoft-only module this one replaces. Kept so
+     * that the feeds already declared on the platforms keep working.
+     */
+    const LEGACY_ROUTE_RULE = 'microsoft-ads-feed/{token}';
 
     /** Hooks through which a catalogue change reaches the module. */
     const CATALOG_HOOKS = [
@@ -61,7 +69,7 @@ class MicrosoftAdsFeed extends Module
     /** @var bool the end-of-request work is already scheduled */
     private static $afterRequestScheduled = false;
 
-    /** @var MicrosoftAdsFeedStore|null */
+    /** @var ProductFeedStore|null */
     private $store;
 
     /** @var array<int, string> */
@@ -69,9 +77,9 @@ class MicrosoftAdsFeed extends Module
 
     public function __construct()
     {
-        $this->name = 'microsoftadsfeed';
+        $this->name = 'productfeed';
         $this->tab = 'advertising_marketing';
-        $this->version = '1.0.0';
+        $this->version = '2.0.0';
         $this->author = 'SBINFO';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -79,9 +87,9 @@ class MicrosoftAdsFeed extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Microsoft Ads product feed');
-        $this->description = $this->l('Publishes your catalogue in the format Microsoft Merchant Center downloads, updated as soon as a product changes.');
-        $this->confirmUninstall = $this->l('Remove the module? The feed address will stop working and Microsoft will no longer receive your products.');
+        $this->displayName = $this->l('Product feeds');
+        $this->description = $this->l('Publishes your catalogue for Google Merchant Center, Microsoft Merchant Center, Meta and Pinterest, updated as soon as a product changes.');
+        $this->confirmUninstall = $this->l('Remove the module? The feed addresses will stop working and the platforms will no longer receive your products.');
     }
 
     /**
@@ -93,12 +101,16 @@ class MicrosoftAdsFeed extends Module
             return false;
         }
 
-        foreach (MicrosoftAdsFeedConfig::DEFAULTS as $key => $default) {
+        foreach (ProductFeedConfig::DEFAULTS as $key => $default) {
             Configuration::updateValue($key, $default);
         }
-        Configuration::updateValue('MSADSFEED_LANG', (int) Configuration::get('PS_LANG_DEFAULT'));
-        Configuration::updateValue('MSADSFEED_IMAGE_TYPE', $this->defaultImageType());
-        MicrosoftAdsFeedConfig::token();
+        Configuration::updateValue('PRODUCTFEED_LANG', (int) Configuration::get('PS_LANG_DEFAULT'));
+        Configuration::updateValue('PRODUCTFEED_IMAGE_TYPE', $this->defaultImageType());
+
+        // Taking over from the Microsoft-only module: its settings and its
+        // token come along, so nothing has to be changed on the platforms.
+        ProductFeedConfig::importLegacySettings();
+        ProductFeedConfig::token();
 
         return $this->registerHook(array_merge(['moduleRoutes'], self::CATALOG_HOOKS));
     }
@@ -108,30 +120,30 @@ class MicrosoftAdsFeed extends Module
      */
     public function uninstall()
     {
-        foreach (array_keys(MicrosoftAdsFeedConfig::DEFAULTS) as $key) {
+        foreach (array_keys(ProductFeedConfig::DEFAULTS) as $key) {
             Configuration::deleteByName($key);
         }
-        Configuration::deleteByName(MicrosoftAdsFeedConfig::TOKEN_KEY);
+        Configuration::deleteByName(ProductFeedConfig::TOKEN_KEY);
         $this->store()->purge();
 
         return parent::uninstall();
     }
 
     /**
-     * @return MicrosoftAdsFeedStore
+     * @return ProductFeedStore
      */
     public function store()
     {
         if ($this->store === null) {
-            $this->store = new MicrosoftAdsFeedStore($this->getLocalPath() . 'export/');
+            $this->store = new ProductFeedStore($this->getLocalPath() . 'export/');
         }
 
         return $this->store;
     }
 
     /**
-     * Brings the feed of a shop up to date if needed, and returns the
-     * summary of the file on disk.
+     * Brings the feeds of a shop up to date if needed, and returns the
+     * summary of the files on disk.
      *
      * @param int $idShop
      *
@@ -147,30 +159,31 @@ class MicrosoftAdsFeed extends Module
     /**
      * @param int $idShop
      *
-     * @return array [lines, summary]
+     * @return array [lines per platform, summary]
      */
     public function buildFeed($idShop)
     {
-        $builder = new MicrosoftAdsFeedBuilder($idShop);
+        $builder = new ProductFeedBuilder($idShop);
 
         return $builder->build();
     }
 
     /**
-     * Public address of the feed, the one to paste into Microsoft.
+     * Public address of a platform's feed, the one to paste on the platform.
      *
      * @param int $idShop
+     * @param string $channel
      *
      * @return string
      */
-    public function feedUrl($idShop)
+    public function feedUrl($idShop, $channel)
     {
-        $config = new MicrosoftAdsFeedConfig($idShop);
+        $config = new ProductFeedConfig($idShop);
 
         return $this->context->link->getModuleLink(
             $this->name,
             'feed',
-            ['token' => MicrosoftAdsFeedConfig::token()],
+            ['channel' => $channel, 'token' => ProductFeedConfig::token()],
             true,
             $config->languageId(),
             $idShop
@@ -178,24 +191,53 @@ class MicrosoftAdsFeed extends Module
     }
 
     /**
-     * Serves the feed from an address at the shop root: robots.txt forbids
+     * Address of the Microsoft-only module, still answered in the Microsoft
+     * dialect.
+     *
+     * @param int $idShop
+     *
+     * @return string
+     */
+    public function legacyFeedUrl($idShop)
+    {
+        $config = new ProductFeedConfig($idShop);
+
+        return $this->context->link->getPageLink(
+            'module-productfeed-legacy',
+            true,
+            $config->languageId(),
+            ['token' => ProductFeedConfig::token()],
+            false,
+            $idShop
+        );
+    }
+
+    /**
+     * Serves the feeds from addresses at the shop root: robots.txt forbids
      * the modules folder, and PrestaShop 9 refuses to serve text files there.
      *
      * @return array
      */
     public function hookModuleRoutes()
     {
+        $params = ['fc' => 'module', 'module' => $this->name];
+        $token = ['regexp' => '[a-f0-9]{32}', 'param' => 'token'];
+
         return [
-            'module-microsoftadsfeed-feed' => [
+            'module-productfeed-feed' => [
                 'controller' => 'feed',
                 'rule' => self::ROUTE_RULE,
                 'keywords' => [
-                    'token' => ['regexp' => '[a-f0-9]{32}', 'param' => 'token'],
+                    'channel' => ['regexp' => implode('|', ProductFeedChannel::all()), 'param' => 'channel'],
+                    'token' => $token,
                 ],
-                'params' => [
-                    'fc' => 'module',
-                    'module' => $this->name,
-                ],
+                'params' => $params,
+            ],
+            'module-productfeed-legacy' => [
+                'controller' => 'feed',
+                'rule' => self::LEGACY_ROUTE_RULE,
+                'keywords' => ['token' => $token],
+                'params' => $params + ['channel' => ProductFeedChannel::MICROSOFT],
             ],
         ];
     }
@@ -203,10 +245,10 @@ class MicrosoftAdsFeed extends Module
     /**
      * Records a catalogue change once per request.
      *
-     * Back office and command line changes rebuild the file as soon as the
+     * Back office and command line changes rebuild the files as soon as the
      * response has left. Changes made by customers, stock movements after an
-     * order for instance, only mark the file as outdated: it is rebuilt when
-     * Microsoft next downloads it, so orders never pay for a rebuild.
+     * order for instance, only mark the files as outdated: they are rebuilt
+     * when a platform next downloads one, so orders never pay for a rebuild.
      */
     public function catalogChanged()
     {
@@ -245,7 +287,7 @@ class MicrosoftAdsFeed extends Module
             try {
                 $this->store()->rebuild((int) $idShop, [$this, 'buildFeed'], $changesUntil);
             } catch (Throwable $e) {
-                PrestaShopLogger::addLog('Microsoft Ads feed: ' . $e->getMessage(), 3, null, 'Module', (int) $this->id);
+                PrestaShopLogger::addLog('Product feed: ' . $e->getMessage(), 3, null, 'Module', (int) $this->id);
             }
         }
     }
@@ -417,20 +459,20 @@ class MicrosoftAdsFeed extends Module
             ));
         }
 
-        if (Tools::isSubmit('submitMsAdsFeedSettings')) {
+        if (Tools::isSubmit('submitProductFeedSettings')) {
             $this->saveSettings();
             $output .= $this->afterSave($idShop);
-        } elseif (Tools::isSubmit('submitMsAdsFeedCategories')) {
+        } elseif (Tools::isSubmit('submitProductFeedCategories')) {
             $this->saveCategories();
             $output .= $this->afterSave($idShop);
-        } elseif (Tools::isSubmit('submitMsAdsFeedRebuild')) {
+        } elseif (Tools::isSubmit('submitProductFeedRebuild')) {
             $output .= $this->rebuildFromScreen($idShop)
-                ? $this->displayConfirmation($this->l('The feed has been regenerated.'))
+                ? $this->displayConfirmation($this->l('The feeds have been regenerated.'))
                 : '';
-        } elseif (Tools::isSubmit('submitMsAdsFeedRenewToken')) {
-            MicrosoftAdsFeedConfig::renewToken();
+        } elseif (Tools::isSubmit('submitProductFeedRenewToken')) {
+            ProductFeedConfig::renewToken();
             if ($this->rebuildFromScreen($idShop)) {
-                $output .= $this->displayWarning($this->l('The feed has a new address. Replace the source URL in Microsoft Merchant Center, the previous one no longer works.'));
+                $output .= $this->displayWarning($this->l('The feeds have new addresses. Replace them on every platform: the previous ones no longer work.'));
             }
         } elseif ($this->store()->isWritable() && $this->store()->meta($idShop) === null) {
             // First visit: build once so the screen can report on the catalogue.
@@ -439,6 +481,10 @@ class MicrosoftAdsFeed extends Module
 
         foreach ($this->formErrors as $error) {
             $output .= $this->displayError($error);
+        }
+
+        if (Module::isInstalled(ProductFeedConfig::LEGACY_MODULE)) {
+            $output .= $this->displayWarning($this->l('The module "Microsoft Ads product feed" (microsoftadsfeed) is still installed. This module has taken over its settings and its address: uninstall it, then delete it from the module manager.'));
         }
 
         return $output
@@ -459,7 +505,7 @@ class MicrosoftAdsFeed extends Module
         }
 
         return $this->rebuildFromScreen($idShop)
-            ? $this->displayConfirmation($this->l('Settings saved and feed regenerated.'))
+            ? $this->displayConfirmation($this->l('Settings saved and feeds regenerated.'))
             : '';
     }
 
@@ -476,7 +522,7 @@ class MicrosoftAdsFeed extends Module
 
             return true;
         } catch (Throwable $e) {
-            $this->formErrors[] = sprintf($this->l('The feed could not be generated: %s'), htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
+            $this->formErrors[] = sprintf($this->l('The feeds could not be generated: %s'), htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
 
             return false;
         }
@@ -484,78 +530,79 @@ class MicrosoftAdsFeed extends Module
 
     private function saveSettings()
     {
-        $idLang = (int) Tools::getValue('MSADSFEED_LANG');
+        $idLang = (int) Tools::getValue('PRODUCTFEED_LANG');
         if (!Language::getLanguage($idLang)) {
             $this->formErrors[] = $this->l('Choose a language for the feed.');
         }
 
-        $imageType = (string) Tools::getValue('MSADSFEED_IMAGE_TYPE');
+        $imageType = (string) Tools::getValue('PRODUCTFEED_IMAGE_TYPE');
         if ($imageType !== '' && !ImageType::typeAlreadyExists($imageType)) {
             $this->formErrors[] = $this->l('The image format does not exist.');
         }
 
         $amounts = [];
-        foreach (['MSADSFEED_SHIPPING_COST', 'MSADSFEED_FREE_SHIPPING_FROM'] as $key) {
+        foreach (['PRODUCTFEED_SHIPPING_COST', 'PRODUCTFEED_FREE_SHIPPING_FROM'] as $key) {
             $raw = trim((string) Tools::getValue($key));
-            $amount = MicrosoftAdsFeedConfig::parseAmount($raw);
+            $amount = ProductFeedConfig::parseAmount($raw);
             if ($raw !== '' && $amount === null) {
                 $this->formErrors[] = sprintf($this->l('%s is not a valid amount.'), htmlspecialchars($raw, ENT_QUOTES, 'UTF-8'));
             }
-            $amounts[$key] = $amount === null ? '' : MicrosoftAdsFeedText::amount($amount);
+            $amounts[$key] = $amount === null ? '' : ProductFeedText::amount($amount);
         }
 
-        $excludedRaw = (string) Tools::getValue('MSADSFEED_EXCLUDED_PRODUCTS');
+        $excludedRaw = (string) Tools::getValue('PRODUCTFEED_EXCLUDED_PRODUCTS');
         if (preg_match('/[^\d\s,;]/', $excludedRaw)) {
             $this->formErrors[] = $this->l('Excluded products: enter product IDs separated by commas.');
         }
 
         $attributeMap = [];
         foreach (AttributeGroup::getAttributesGroups($this->context->language->id) as $group) {
-            $field = (string) Tools::getValue('MSADSFEED_GROUP_' . (int) $group['id_attribute_group']);
-            $attributeMap[(int) $group['id_attribute_group']] = in_array($field, MicrosoftAdsFeedConfig::VARIANT_FIELDS, true) ? $field : '';
+            $field = (string) Tools::getValue('PRODUCTFEED_GROUP_' . (int) $group['id_attribute_group']);
+            $attributeMap[(int) $group['id_attribute_group']] = in_array($field, ProductFeedConfig::VARIANT_FIELDS, true) ? $field : '';
         }
 
         if (!empty($this->formErrors)) {
             return;
         }
 
-        $outOfStock = Tools::getValue('MSADSFEED_OUT_OF_STOCK') === MicrosoftAdsFeedConfig::OUT_OF_STOCK_EXCLUDE
-            ? MicrosoftAdsFeedConfig::OUT_OF_STOCK_EXCLUDE
-            : MicrosoftAdsFeedConfig::OUT_OF_STOCK_INCLUDE;
-        $description = Tools::getValue('MSADSFEED_DESCRIPTION') === MicrosoftAdsFeedConfig::DESCRIPTION_SHORT
-            ? MicrosoftAdsFeedConfig::DESCRIPTION_SHORT
-            : MicrosoftAdsFeedConfig::DESCRIPTION_LONG;
+        $outOfStock = Tools::getValue('PRODUCTFEED_OUT_OF_STOCK') === ProductFeedConfig::OUT_OF_STOCK_EXCLUDE
+            ? ProductFeedConfig::OUT_OF_STOCK_EXCLUDE
+            : ProductFeedConfig::OUT_OF_STOCK_INCLUDE;
+        $description = Tools::getValue('PRODUCTFEED_DESCRIPTION') === ProductFeedConfig::DESCRIPTION_SHORT
+            ? ProductFeedConfig::DESCRIPTION_SHORT
+            : ProductFeedConfig::DESCRIPTION_LONG;
 
-        Configuration::updateValue('MSADSFEED_LANG', $idLang);
-        Configuration::updateValue('MSADSFEED_TAX_INCL', (int) (bool) Tools::getValue('MSADSFEED_TAX_INCL'));
-        Configuration::updateValue('MSADSFEED_COMBINATIONS', (int) (bool) Tools::getValue('MSADSFEED_COMBINATIONS'));
-        Configuration::updateValue('MSADSFEED_OUT_OF_STOCK', $outOfStock);
-        Configuration::updateValue('MSADSFEED_DESCRIPTION', $description);
-        Configuration::updateValue('MSADSFEED_IMAGE_TYPE', $imageType);
-        Configuration::updateValue('MSADSFEED_DEFAULT_BRAND', MicrosoftAdsFeedText::plain((string) Tools::getValue('MSADSFEED_DEFAULT_BRAND'), MicrosoftAdsFeedBuilder::MAX_BRAND));
-        Configuration::updateValue('MSADSFEED_MPN_FROM_REF', (int) (bool) Tools::getValue('MSADSFEED_MPN_FROM_REF'));
-        Configuration::updateValue('MSADSFEED_SHIPPING_COST', $amounts['MSADSFEED_SHIPPING_COST']);
-        Configuration::updateValue('MSADSFEED_FREE_SHIPPING_FROM', $amounts['MSADSFEED_FREE_SHIPPING_FROM']);
-        Configuration::updateValue('MSADSFEED_EXCLUDED_PRODUCTS', implode(',', MicrosoftAdsFeedConfig::parseIds($excludedRaw)));
-        Configuration::updateValue('MSADSFEED_ATTRIBUTE_MAP', json_encode($attributeMap));
+        Configuration::updateValue('PRODUCTFEED_LANG', $idLang);
+        Configuration::updateValue('PRODUCTFEED_TAX_INCL', (int) (bool) Tools::getValue('PRODUCTFEED_TAX_INCL'));
+        Configuration::updateValue('PRODUCTFEED_COMBINATIONS', (int) (bool) Tools::getValue('PRODUCTFEED_COMBINATIONS'));
+        Configuration::updateValue('PRODUCTFEED_OUT_OF_STOCK', $outOfStock);
+        Configuration::updateValue('PRODUCTFEED_DESCRIPTION', $description);
+        Configuration::updateValue('PRODUCTFEED_IMAGE_TYPE', $imageType);
+        Configuration::updateValue('PRODUCTFEED_DEFAULT_BRAND', ProductFeedText::plain((string) Tools::getValue('PRODUCTFEED_DEFAULT_BRAND'), ProductFeedBuilder::MAX_BRAND));
+        Configuration::updateValue('PRODUCTFEED_MPN_FROM_REF', (int) (bool) Tools::getValue('PRODUCTFEED_MPN_FROM_REF'));
+        Configuration::updateValue('PRODUCTFEED_SHIPPING_COST', $amounts['PRODUCTFEED_SHIPPING_COST']);
+        Configuration::updateValue('PRODUCTFEED_FREE_SHIPPING_FROM', $amounts['PRODUCTFEED_FREE_SHIPPING_FROM']);
+        Configuration::updateValue('PRODUCTFEED_EXCLUDED_PRODUCTS', implode(',', ProductFeedConfig::parseIds($excludedRaw)));
+        Configuration::updateValue('PRODUCTFEED_GOOGLE_NO_LOCAL', (int) (bool) Tools::getValue('PRODUCTFEED_GOOGLE_NO_LOCAL'));
+        Configuration::updateValue('PRODUCTFEED_ATTRIBUTE_MAP', json_encode($attributeMap));
     }
 
     private function saveCategories()
     {
         $map = [];
-        $submitted = Tools::getValue('msads_category');
+        $submitted = Tools::getValue('pf_category');
         foreach (is_array($submitted) ? $submitted : [] as $idCategory => $value) {
-            $value = MicrosoftAdsFeedText::plain((string) $value, 255);
+            $value = ProductFeedText::plain((string) $value, 255);
             if ((int) $idCategory > 0 && $value !== '') {
                 $map[(int) $idCategory] = $value;
             }
         }
 
-        $excluded = Tools::getValue('msads_exclude');
+        $excluded = Tools::getValue('pf_exclude');
         $excluded = is_array($excluded) ? array_keys(array_filter($excluded)) : [];
 
-        Configuration::updateValue('MSADSFEED_CATEGORY_MAP', json_encode($map, JSON_UNESCAPED_UNICODE));
-        Configuration::updateValue('MSADSFEED_CATEGORY_EXCLUDED', implode(',', MicrosoftAdsFeedConfig::parseIds(implode(',', $excluded))));
+        Configuration::updateValue('PRODUCTFEED_CATEGORY_MAP', json_encode($map, JSON_UNESCAPED_UNICODE));
+        Configuration::updateValue('PRODUCTFEED_CATEGORY_EXCLUDED', implode(',', ProductFeedConfig::parseIds(implode(',', $excluded))));
     }
 
     /**
@@ -592,16 +639,26 @@ class MicrosoftAdsFeed extends Module
             }
         }
 
+        $channels = [];
+        foreach ($this->channelLabels() as $channel => $labels) {
+            $channels[] = [
+                'id' => $channel,
+                'name' => $labels['name'],
+                'help' => $labels['help'],
+                'url' => $this->feedUrl($idShop, $channel),
+                'size' => $meta !== null && isset($meta['size'][$channel]) ? Tools::formatBytes((int) $meta['size'][$channel], 1) : '',
+            ];
+        }
+
         $this->context->smarty->assign([
-            'msads_url' => $this->feedUrl($idShop),
-            'msads_meta' => $meta,
-            'msads_generated' => $meta !== null ? Tools::displayDate(date('Y-m-d H:i:s', (int) $meta['finished_at']), true) : '',
-            'msads_size' => $meta !== null ? Tools::formatBytes((int) $meta['size'], 1) : '',
-            'msads_columns' => $meta !== null ? implode(', ', $meta['columns']) : '',
-            'msads_pending' => $meta !== null && $this->store()->isStale($idShop),
-            'msads_summary' => $summary,
-            'msads_issues' => $issues,
-            'msads_form_action' => $this->configureUrl(),
+            'pf_channels' => $channels,
+            'pf_legacy_url' => $this->legacyFeedUrl($idShop),
+            'pf_meta' => $meta,
+            'pf_generated' => $meta !== null ? Tools::displayDate(date('Y-m-d H:i:s', (int) $meta['finished_at']), true) : '',
+            'pf_pending' => $meta !== null && $this->store()->isStale($idShop),
+            'pf_summary' => $summary,
+            'pf_issues' => $issues,
+            'pf_form_action' => $this->configureUrl(),
         ]);
 
         return $this->context->smarty->fetch($this->getLocalPath() . 'views/templates/admin/status.tpl');
@@ -613,7 +670,7 @@ class MicrosoftAdsFeed extends Module
     private function renderSettingsForm()
     {
         $idLang = (int) $this->context->language->id;
-        $config = new MicrosoftAdsFeedConfig((int) $this->context->shop->id);
+        $config = new ProductFeedConfig((int) $this->context->shop->id);
 
         $languages = [];
         foreach (Language::getLanguages(true, (int) $this->context->shop->id) as $language) {
@@ -634,58 +691,58 @@ class MicrosoftAdsFeed extends Module
             [
                 'type' => 'select',
                 'label' => $this->l('Language'),
-                'name' => 'MSADSFEED_LANG',
-                'desc' => $this->l('Titles, descriptions and product addresses are taken in this language. It must match the language of the Microsoft feed.'),
+                'name' => 'PRODUCTFEED_LANG',
+                'desc' => $this->l('Titles, descriptions and product addresses are taken in this language. It must match the language declared on each platform.'),
                 'options' => ['query' => $languages, 'id' => 'id', 'name' => 'name'],
             ],
-            $this->switchField('MSADSFEED_TAX_INCL', $this->l('Prices including tax'), $this->l('Required for France, Germany and the United Kingdom. Turn it off only for a store selling in the United States.')),
-            $this->switchField('MSADSFEED_COMBINATIONS', $this->l('One line per combination'), $this->l('Each combination becomes a product of its own, with its price, stock, barcode and image. Otherwise only the default combination is sent.')),
+            $this->switchField('PRODUCTFEED_TAX_INCL', $this->l('Prices including tax'), $this->l('Required for France, Germany and the United Kingdom. Turn it off only for a store selling in the United States.')),
+            $this->switchField('PRODUCTFEED_COMBINATIONS', $this->l('One line per combination'), $this->l('Each combination becomes a product of its own, with its price, stock, barcode and image. Otherwise only the default combination is sent.')),
             [
                 'type' => 'select',
                 'label' => $this->l('Products out of stock'),
-                'name' => 'MSADSFEED_OUT_OF_STOCK',
-                'desc' => $this->l('Microsoft recommends sending them as out of stock rather than removing them: the ad pauses and restarts on its own when the stock returns.'),
+                'name' => 'PRODUCTFEED_OUT_OF_STOCK',
+                'desc' => $this->l('Google and Microsoft recommend sending them as out of stock rather than removing them: the ad pauses and restarts on its own when the stock returns.'),
                 'options' => ['query' => [
-                    ['id' => MicrosoftAdsFeedConfig::OUT_OF_STOCK_INCLUDE, 'name' => $this->l('Send them as out of stock')],
-                    ['id' => MicrosoftAdsFeedConfig::OUT_OF_STOCK_EXCLUDE, 'name' => $this->l('Leave them out of the feed')],
+                    ['id' => ProductFeedConfig::OUT_OF_STOCK_INCLUDE, 'name' => $this->l('Send them as out of stock')],
+                    ['id' => ProductFeedConfig::OUT_OF_STOCK_EXCLUDE, 'name' => $this->l('Leave them out of the feed')],
                 ], 'id' => 'id', 'name' => 'name'],
             ],
             [
                 'type' => 'select',
                 'label' => $this->l('Description'),
-                'name' => 'MSADSFEED_DESCRIPTION',
+                'name' => 'PRODUCTFEED_DESCRIPTION',
                 'desc' => $this->l('The other description is used when this one is empty. Formatting is removed.'),
                 'options' => ['query' => [
-                    ['id' => MicrosoftAdsFeedConfig::DESCRIPTION_LONG, 'name' => $this->l('Full description')],
-                    ['id' => MicrosoftAdsFeedConfig::DESCRIPTION_SHORT, 'name' => $this->l('Summary')],
+                    ['id' => ProductFeedConfig::DESCRIPTION_LONG, 'name' => $this->l('Full description')],
+                    ['id' => ProductFeedConfig::DESCRIPTION_SHORT, 'name' => $this->l('Summary')],
                 ], 'id' => 'id', 'name' => 'name'],
             ],
             [
                 'type' => 'select',
                 'label' => $this->l('Image size'),
-                'name' => 'MSADSFEED_IMAGE_TYPE',
-                'desc' => $this->l('Microsoft asks for at least 220 × 220 pixels. The larger the better, as long as the image stays under 16 MB.'),
+                'name' => 'PRODUCTFEED_IMAGE_TYPE',
+                'desc' => $this->l('Meta asks for at least 500 × 500 pixels, Microsoft 220 × 220 and Google 100 × 100. The larger the better, as long as the image stays under 8 MB.'),
                 'options' => ['query' => $imageTypes, 'id' => 'id', 'name' => 'name'],
             ],
             [
                 'type' => 'text',
                 'label' => $this->l('Default brand'),
-                'name' => 'MSADSFEED_DEFAULT_BRAND',
+                'name' => 'PRODUCTFEED_DEFAULT_BRAND',
                 'desc' => $this->l('Used for products without a brand. Put your shop name only for products you make yourself.'),
             ],
-            $this->switchField('MSADSFEED_MPN_FROM_REF', $this->l('Reference as MPN'), $this->l('When the MPN field is empty, send the product reference instead. Only makes sense for products you manufacture.')),
+            $this->switchField('PRODUCTFEED_MPN_FROM_REF', $this->l('Reference as MPN'), $this->l('When the MPN field is empty, send the product reference instead. Only makes sense for products you manufacture.')),
             [
                 'type' => 'text',
                 'label' => $this->l('Shipping cost'),
-                'name' => 'MSADSFEED_SHIPPING_COST',
+                'name' => 'PRODUCTFEED_SHIPPING_COST',
                 'class' => 'fixed-width-sm',
                 'suffix' => $currency->iso_code,
-                'desc' => $this->l('Optional, except for Germany and Austria. Leave empty to use the shipping settings of your Microsoft store.'),
+                'desc' => $this->l('Optional for France. Leave empty to use the shipping settings declared on each platform.'),
             ],
             [
                 'type' => 'text',
                 'label' => $this->l('Free shipping from'),
-                'name' => 'MSADSFEED_FREE_SHIPPING_FROM',
+                'name' => 'PRODUCTFEED_FREE_SHIPPING_FROM',
                 'class' => 'fixed-width-sm',
                 'suffix' => $currency->iso_code,
                 'desc' => $this->l('Products at or above this price are sent with free shipping.'),
@@ -693,9 +750,10 @@ class MicrosoftAdsFeed extends Module
             [
                 'type' => 'text',
                 'label' => $this->l('Excluded products'),
-                'name' => 'MSADSFEED_EXCLUDED_PRODUCTS',
+                'name' => 'PRODUCTFEED_EXCLUDED_PRODUCTS',
                 'desc' => $this->l('Product IDs separated by commas. Whole categories can be excluded in the table below.'),
             ],
+            $this->switchField('PRODUCTFEED_GOOGLE_NO_LOCAL', $this->l('Google: no local listings'), $this->l('For a shop without a physical store. Keeps the products away from free local listings and local inventory ads, which otherwise report missing store inventory. Removing these two add-ons in Merchant Center does the same for the whole account.')),
         ];
 
         $fieldOptions = [
@@ -707,9 +765,9 @@ class MicrosoftAdsFeed extends Module
         ];
         $values = [];
         $attributeMap = $config->attributeMap();
-        $groupHelp = $this->l('Microsoft groups combinations of a product only when at least one attribute is sent.');
+        $groupHelp = $this->l('The platforms group the combinations of a product only when at least one attribute is sent.');
         foreach (AttributeGroup::getAttributesGroups($idLang) as $group) {
-            $key = 'MSADSFEED_GROUP_' . (int) $group['id_attribute_group'];
+            $key = 'PRODUCTFEED_GROUP_' . (int) $group['id_attribute_group'];
             $inputs[] = [
                 'type' => 'select',
                 'label' => sprintf($this->l('Attribute "%s"'), htmlspecialchars($group['name'], ENT_QUOTES, 'UTF-8')),
@@ -721,10 +779,10 @@ class MicrosoftAdsFeed extends Module
             $values[$key] = Tools::getValue($key, $attributeMap[(int) $group['id_attribute_group']] ?? '');
         }
 
-        foreach (array_keys(MicrosoftAdsFeedConfig::DEFAULTS) as $key) {
+        foreach (array_keys(ProductFeedConfig::DEFAULTS) as $key) {
             $values[$key] = Tools::getValue($key, $config->get($key));
         }
-        $values['MSADSFEED_LANG'] = Tools::getValue('MSADSFEED_LANG', $config->languageId());
+        $values['PRODUCTFEED_LANG'] = Tools::getValue('PRODUCTFEED_LANG', $config->languageId());
 
         $helper = new HelperForm();
         $helper->module = $this;
@@ -733,7 +791,7 @@ class MicrosoftAdsFeed extends Module
         $helper->token = Tools::getAdminTokenLite('AdminModules');
         $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
         $helper->default_form_language = $idLang;
-        $helper->submit_action = 'submitMsAdsFeedSettings';
+        $helper->submit_action = 'submitProductFeedSettings';
         $helper->tpl_vars = ['fields_value' => $values];
 
         return $helper->generateForm([['form' => [
@@ -744,7 +802,7 @@ class MicrosoftAdsFeed extends Module
     }
 
     /**
-     * Category table: Microsoft category and exclusion, inherited downwards.
+     * Category table: Google category and exclusion, inherited downwards.
      *
      * @param int $idShop
      *
@@ -752,7 +810,7 @@ class MicrosoftAdsFeed extends Module
      */
     private function renderCategories($idShop)
     {
-        $config = new MicrosoftAdsFeedConfig($idShop);
+        $config = new ProductFeedConfig($idShop);
         $idLang = $config->languageId();
         $map = $config->categoryMap();
         $excluded = $config->excludedCategories();
@@ -800,8 +858,8 @@ class MicrosoftAdsFeed extends Module
         }
 
         $this->context->smarty->assign([
-            'msads_categories' => $categories,
-            'msads_form_action' => $this->configureUrl(),
+            'pf_categories' => $categories,
+            'pf_form_action' => $this->configureUrl(),
         ]);
 
         return $this->context->smarty->fetch($this->getLocalPath() . 'views/templates/admin/categories.tpl');
@@ -821,9 +879,37 @@ class MicrosoftAdsFeed extends Module
             'no_image' => $this->l('No image'),
             'out_of_stock' => $this->l('Out of stock'),
             'error' => $this->l('Error while reading the product'),
-            'no_category' => $this->l('No Microsoft category'),
+            'no_category' => $this->l('No Google category'),
+            'no_brand' => $this->l('No brand: Meta rejects the product, Google and Microsoft show it less'),
             'invalid_gtin' => $this->l('Barcode rejected (wrong length, check digit or reserved range)'),
-            'no_identifier' => $this->l('No barcode, or no brand and MPN: sent with identifier_exists FALSE'),
+            'no_identifier' => $this->l('No barcode, nor brand and MPN: sent as a product without identifier'),
+        ];
+    }
+
+    /**
+     * Platforms in the order shown, with where to paste each address.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function channelLabels()
+    {
+        return [
+            ProductFeedChannel::GOOGLE => [
+                'name' => 'Google Merchant Center',
+                'help' => $this->l('Products, Data sources, Add a product source, File: enter the address. Also suits other services that read Google Shopping feeds.'),
+            ],
+            ProductFeedChannel::MICROSOFT => [
+                'name' => 'Microsoft Merchant Center',
+                'help' => $this->l('Feeds, Create feed, input method "Automatically download file from URL".'),
+            ],
+            ProductFeedChannel::META => [
+                'name' => 'Meta (Facebook, Instagram)',
+                'help' => $this->l('Commerce Manager, Catalogue, Data sources, Data feed, Scheduled feed.'),
+            ],
+            ProductFeedChannel::PINTEREST => [
+                'name' => 'Pinterest',
+                'help' => $this->l('Ads, Catalogues, Add data source: enter the address.'),
+            ],
         ];
     }
 
@@ -836,7 +922,7 @@ class MicrosoftAdsFeed extends Module
     }
 
     /**
-     * Largest product image format, which suits Microsoft best.
+     * Largest product image format, which suits every platform.
      *
      * @return string
      */

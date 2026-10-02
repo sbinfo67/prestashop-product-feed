@@ -1,6 +1,6 @@
 <?php
 /**
- * Microsoft Ads product feed for PrestaShop.
+ * Product feeds for PrestaShop: Google, Microsoft, Meta, Pinterest.
  *
  * @author    SBINFO <contact@sbinfo.pro>
  * @copyright 2026 SBINFO
@@ -14,7 +14,7 @@ if (!defined('_PS_VERSION_')) {
 /**
  * Settings of the module, read shop by shop.
  */
-class MicrosoftAdsFeedConfig
+class ProductFeedConfig
 {
     const OUT_OF_STOCK_INCLUDE = 'include';
     const OUT_OF_STOCK_EXCLUDE = 'exclude';
@@ -26,24 +26,29 @@ class MicrosoftAdsFeedConfig
     const VARIANT_FIELDS = ['color', 'size', 'material', 'pattern'];
 
     /** Shared by every shop: the secret part of the feed address. */
-    const TOKEN_KEY = 'MSADSFEED_TOKEN';
+    const TOKEN_KEY = 'PRODUCTFEED_TOKEN';
+
+    /** Module this one replaces, and the prefix of its settings. */
+    const LEGACY_MODULE = 'microsoftadsfeed';
+    const LEGACY_PREFIX = 'MSADSFEED_';
 
     /** Stored values; an empty default is filled at install time from the shop. */
     const DEFAULTS = [
-        'MSADSFEED_LANG' => '',
-        'MSADSFEED_TAX_INCL' => '1',
-        'MSADSFEED_COMBINATIONS' => '1',
-        'MSADSFEED_OUT_OF_STOCK' => self::OUT_OF_STOCK_INCLUDE,
-        'MSADSFEED_DESCRIPTION' => self::DESCRIPTION_LONG,
-        'MSADSFEED_IMAGE_TYPE' => '',
-        'MSADSFEED_DEFAULT_BRAND' => '',
-        'MSADSFEED_MPN_FROM_REF' => '0',
-        'MSADSFEED_SHIPPING_COST' => '',
-        'MSADSFEED_FREE_SHIPPING_FROM' => '',
-        'MSADSFEED_EXCLUDED_PRODUCTS' => '',
-        'MSADSFEED_CATEGORY_MAP' => '{}',
-        'MSADSFEED_CATEGORY_EXCLUDED' => '',
-        'MSADSFEED_ATTRIBUTE_MAP' => '{}',
+        'PRODUCTFEED_LANG' => '',
+        'PRODUCTFEED_TAX_INCL' => '1',
+        'PRODUCTFEED_COMBINATIONS' => '1',
+        'PRODUCTFEED_OUT_OF_STOCK' => self::OUT_OF_STOCK_INCLUDE,
+        'PRODUCTFEED_DESCRIPTION' => self::DESCRIPTION_LONG,
+        'PRODUCTFEED_IMAGE_TYPE' => '',
+        'PRODUCTFEED_DEFAULT_BRAND' => '',
+        'PRODUCTFEED_MPN_FROM_REF' => '0',
+        'PRODUCTFEED_SHIPPING_COST' => '',
+        'PRODUCTFEED_FREE_SHIPPING_FROM' => '',
+        'PRODUCTFEED_EXCLUDED_PRODUCTS' => '',
+        'PRODUCTFEED_CATEGORY_MAP' => '{}',
+        'PRODUCTFEED_CATEGORY_EXCLUDED' => '',
+        'PRODUCTFEED_ATTRIBUTE_MAP' => '{}',
+        'PRODUCTFEED_GOOGLE_NO_LOCAL' => '0',
     ];
 
     /** @var int */
@@ -74,7 +79,7 @@ class MicrosoftAdsFeedConfig
      */
     public function languageId()
     {
-        $idLang = (int) $this->get('MSADSFEED_LANG');
+        $idLang = (int) $this->get('PRODUCTFEED_LANG');
         if ($idLang > 0 && Language::getLanguage($idLang)) {
             return $idLang;
         }
@@ -87,7 +92,7 @@ class MicrosoftAdsFeedConfig
      */
     public function taxIncluded()
     {
-        return (bool) $this->get('MSADSFEED_TAX_INCL');
+        return (bool) $this->get('PRODUCTFEED_TAX_INCL');
     }
 
     /**
@@ -95,7 +100,7 @@ class MicrosoftAdsFeedConfig
      */
     public function exportCombinations()
     {
-        return (bool) $this->get('MSADSFEED_COMBINATIONS');
+        return (bool) $this->get('PRODUCTFEED_COMBINATIONS');
     }
 
     /**
@@ -103,7 +108,7 @@ class MicrosoftAdsFeedConfig
      */
     public function excludeOutOfStock()
     {
-        return $this->get('MSADSFEED_OUT_OF_STOCK') === self::OUT_OF_STOCK_EXCLUDE;
+        return $this->get('PRODUCTFEED_OUT_OF_STOCK') === self::OUT_OF_STOCK_EXCLUDE;
     }
 
     /**
@@ -111,7 +116,7 @@ class MicrosoftAdsFeedConfig
      */
     public function preferShortDescription()
     {
-        return $this->get('MSADSFEED_DESCRIPTION') === self::DESCRIPTION_SHORT;
+        return $this->get('PRODUCTFEED_DESCRIPTION') === self::DESCRIPTION_SHORT;
     }
 
     /**
@@ -121,7 +126,7 @@ class MicrosoftAdsFeedConfig
      */
     public function imageType()
     {
-        return $this->get('MSADSFEED_IMAGE_TYPE');
+        return $this->get('PRODUCTFEED_IMAGE_TYPE');
     }
 
     /**
@@ -129,7 +134,18 @@ class MicrosoftAdsFeedConfig
      */
     public function defaultBrand()
     {
-        return trim($this->get('MSADSFEED_DEFAULT_BRAND'));
+        return trim($this->get('PRODUCTFEED_DEFAULT_BRAND'));
+    }
+
+    /**
+     * Whether the Google feed keeps products away from local listings and
+     * local inventory ads, for a shop without a physical store.
+     *
+     * @return bool
+     */
+    public function googleWithoutLocal()
+    {
+        return (bool) $this->get('PRODUCTFEED_GOOGLE_NO_LOCAL');
     }
 
     /**
@@ -137,7 +153,7 @@ class MicrosoftAdsFeedConfig
      */
     public function referenceAsMpn()
     {
-        return (bool) $this->get('MSADSFEED_MPN_FROM_REF');
+        return (bool) $this->get('PRODUCTFEED_MPN_FROM_REF');
     }
 
     /**
@@ -147,7 +163,7 @@ class MicrosoftAdsFeedConfig
      */
     public function shippingCost()
     {
-        return self::parseAmount($this->get('MSADSFEED_SHIPPING_COST'));
+        return self::parseAmount($this->get('PRODUCTFEED_SHIPPING_COST'));
     }
 
     /**
@@ -157,7 +173,7 @@ class MicrosoftAdsFeedConfig
      */
     public function freeShippingFrom()
     {
-        return self::parseAmount($this->get('MSADSFEED_FREE_SHIPPING_FROM'));
+        return self::parseAmount($this->get('PRODUCTFEED_FREE_SHIPPING_FROM'));
     }
 
     /**
@@ -165,7 +181,7 @@ class MicrosoftAdsFeedConfig
      */
     public function excludedProducts()
     {
-        return array_fill_keys(self::parseIds($this->get('MSADSFEED_EXCLUDED_PRODUCTS')), true);
+        return array_fill_keys(self::parseIds($this->get('PRODUCTFEED_EXCLUDED_PRODUCTS')), true);
     }
 
     /**
@@ -176,7 +192,7 @@ class MicrosoftAdsFeedConfig
     public function categoryMap()
     {
         $map = [];
-        foreach (self::decodeMap($this->get('MSADSFEED_CATEGORY_MAP')) as $idCategory => $value) {
+        foreach (self::decodeMap($this->get('PRODUCTFEED_CATEGORY_MAP')) as $idCategory => $value) {
             $value = trim((string) $value);
             if ((int) $idCategory > 0 && $value !== '') {
                 $map[(int) $idCategory] = $value;
@@ -191,7 +207,7 @@ class MicrosoftAdsFeedConfig
      */
     public function excludedCategories()
     {
-        return array_fill_keys(self::parseIds($this->get('MSADSFEED_CATEGORY_EXCLUDED')), true);
+        return array_fill_keys(self::parseIds($this->get('PRODUCTFEED_CATEGORY_EXCLUDED')), true);
     }
 
     /**
@@ -203,7 +219,7 @@ class MicrosoftAdsFeedConfig
      */
     public function attributeMap()
     {
-        $stored = self::decodeMap($this->get('MSADSFEED_ATTRIBUTE_MAP'));
+        $stored = self::decodeMap($this->get('PRODUCTFEED_ATTRIBUTE_MAP'));
         $map = [];
 
         foreach (AttributeGroup::getAttributesGroups($this->languageId()) as $group) {
@@ -253,6 +269,46 @@ class MicrosoftAdsFeedConfig
         $token = (string) Configuration::getGlobalValue(self::TOKEN_KEY);
 
         return $token !== '' && is_string($candidate) && hash_equals($token, $candidate);
+    }
+
+    /**
+     * Copies the settings of the Microsoft-only module this one replaces,
+     * shop by shop, token included: the addresses already pasted into
+     * Microsoft and Google keep working.
+     *
+     * @return bool whether there was anything to import
+     */
+    public static function importLegacySettings()
+    {
+        $rows = Db::getInstance()->executeS(
+            'SELECT `name`, `value`, `id_shop`, `id_shop_group`
+            FROM `' . _DB_PREFIX_ . 'configuration`
+            WHERE LEFT(`name`, ' . strlen(self::LEGACY_PREFIX) . ') = \'' . pSQL(self::LEGACY_PREFIX) . '\''
+        ) ?: [];
+
+        $imported = false;
+        foreach ($rows as $row) {
+            $key = 'PRODUCTFEED_' . substr($row['name'], strlen(self::LEGACY_PREFIX));
+            if ($key !== self::TOKEN_KEY && !array_key_exists($key, self::DEFAULTS)) {
+                continue;
+            }
+
+            $value = (string) $row['value'];
+            if ($row['id_shop'] === null && $row['id_shop_group'] === null) {
+                Configuration::updateGlobalValue($key, $value);
+            } else {
+                Configuration::updateValue(
+                    $key,
+                    $value,
+                    false,
+                    $row['id_shop_group'] === null ? null : (int) $row['id_shop_group'],
+                    $row['id_shop'] === null ? null : (int) $row['id_shop']
+                );
+            }
+            $imported = true;
+        }
+
+        return $imported;
     }
 
     /**
