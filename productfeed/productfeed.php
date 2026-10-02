@@ -80,7 +80,7 @@ class ProductFeed extends Module
     {
         $this->name = 'productfeed';
         $this->tab = 'advertising_marketing';
-        $this->version = '2.1.1';
+        $this->version = '2.1.2';
         $this->author = 'SBINFO';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -627,27 +627,28 @@ class ProductFeed extends Module
     {
         $meta = $this->store()->meta($idShop);
         $reasons = $this->reasonLabels();
-        $issues = [];
 
-        if ($meta !== null) {
-            foreach ($meta['issues'] as $issue) {
-                $issue['reason_label'] = isset($reasons[$issue['reason']]) ? $reasons[$issue['reason']] : $issue['reason'];
-                $issue['edit_url'] = $issue['id_product'] > 0 ? $this->context->link->getAdminLink(
-                    'AdminProducts',
-                    true,
-                    ['route' => 'admin_products_edit', 'productId' => (int) $issue['id_product']]
-                ) : '';
-                $issues[] = $issue;
-            }
+        // Products behind each point to check, shown when the line is opened.
+        $products = [];
+        foreach ($meta !== null ? $meta['issues'] : [] as $issue) {
+            $issue['edit_url'] = $issue['id_product'] > 0 ? $this->context->link->getAdminLink(
+                'AdminProducts',
+                true,
+                ['route' => 'admin_products_edit', 'productId' => (int) $issue['id_product']]
+            ) : '';
+            $products[$issue['kind']][$issue['reason']][] = $issue;
         }
 
         $summary = [];
         foreach (['skipped', 'warnings'] as $kind) {
             foreach ($meta !== null ? $meta[$kind] : [] as $reason => $count) {
+                $listed = isset($products[$kind][$reason]) ? $products[$kind][$reason] : [];
                 $summary[] = [
                     'kind' => $kind,
                     'label' => isset($reasons[$reason]) ? $reasons[$reason] : $reason,
                     'count' => (int) $count,
+                    'products' => $listed,
+                    'unlisted' => max(0, (int) $count - count($listed)),
                 ];
             }
         }
@@ -670,7 +671,6 @@ class ProductFeed extends Module
             'pf_generated' => $meta !== null ? Tools::displayDate(date('Y-m-d H:i:s', (int) $meta['finished_at']), true) : '',
             'pf_pending' => $meta !== null && $this->store()->isStale($idShop),
             'pf_summary' => $summary,
-            'pf_issues' => $issues,
             'pf_form_action' => $this->configureUrl(),
         ]);
 

@@ -80,57 +80,55 @@
     {/if}
 
     {if $pf_summary}
+        <style>
+            .pf-check > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid #e5e5e5; }
+            .pf-check > summary::-webkit-details-marker { display: none; }
+            .pf-check > summary:hover { background: #f8f8f8; }
+            .pf-check > summary .icon-caret-right { transition: transform .15s; width: 10px; }
+            .pf-check[open] > summary .icon-caret-right { transform: rotate(90deg); }
+            .pf-check .table { margin: 0 0 10px 26px; width: calc(100% - 26px); }
+        </style>
         <h4 style="margin-top: 20px;">{l s='Points to check' mod='productfeed'}</h4>
-        <table class="table">
-            <tbody>
-            {foreach $pf_summary as $line}
-                <tr>
-                    <td style="width: 30%;">
-                        {if $line.kind == 'skipped'}
-                            <span class="label label-danger">{l s='Not sent' mod='productfeed'}</span>
-                        {else}
-                            <span class="label label-warning">{l s='Sent, to improve' mod='productfeed'}</span>
-                        {/if}
-                    </td>
-                    <td>{$line.label|escape:'html':'UTF-8'}</td>
-                    <td style="width: 10%; text-align: right;"><strong>{$line.count|intval}</strong></td>
-                </tr>
-            {/foreach}
-            </tbody>
-        </table>
-
-        {if $pf_issues}
-            <details style="margin-top: 10px;">
-                <summary style="cursor: pointer;">{l s='Show the products concerned' mod='productfeed'}</summary>
-                <table class="table" style="margin-top: 10px;">
-                    <thead>
-                    <tr>
-                        <th>{l s='ID' mod='productfeed'}</th>
-                        <th>{l s='Product' mod='productfeed'}</th>
-                        <th>{l s='Problem' mod='productfeed'}</th>
-                    </tr>
-                    </thead>
+        <p class="help-block">{l s='Click a line to see the products concerned.' mod='productfeed'}</p>
+        {foreach $pf_summary as $line}
+            <details class="pf-check">
+                <summary>
+                    <i class="icon-caret-right"></i>
+                    {if $line.kind == 'skipped'}
+                        <span class="label label-danger">{l s='Not sent' mod='productfeed'}</span>
+                    {else}
+                        <span class="label label-warning">{l s='Sent, to improve' mod='productfeed'}</span>
+                    {/if}
+                    <span style="flex: 1;">{$line.label|escape:'html':'UTF-8'}</span>
+                    <strong>{$line.count|intval}</strong>
+                </summary>
+                <table class="table">
                     <tbody>
-                    {foreach $pf_issues as $issue}
+                    {foreach $line.products as $product}
                         <tr>
+                            <td style="width: 8%;">#{$product.id_product|intval}</td>
                             <td>
-                                {if $issue.edit_url}
-                                    <a href="{$issue.edit_url|escape:'html':'UTF-8'}" target="_blank" rel="noopener noreferrer">{$issue.id_product|intval}</a>
-                                {else}
-                                    {$issue.id_product|intval}
-                                {/if}
+                                {if $product.label}{$product.label|escape:'html':'UTF-8'}{else}{l s='Product' mod='productfeed'} #{$product.id_product|intval}{/if}
+                                {if $product.detail}<br><small class="text-muted">{$product.detail|escape:'html':'UTF-8'}</small>{/if}
                             </td>
-                            <td>{$issue.label|escape:'html':'UTF-8'}</td>
-                            <td>
-                                {$issue.reason_label|escape:'html':'UTF-8'}
-                                {if $issue.detail}<br><small class="text-muted">{$issue.detail|escape:'html':'UTF-8'}</small>{/if}
+                            <td style="width: 15%; text-align: right;">
+                                {if $product.edit_url}
+                                    <a href="{$product.edit_url|escape:'html':'UTF-8'}" target="_blank" rel="noopener noreferrer">
+                                        <i class="icon-pencil"></i> {l s='Edit' mod='productfeed'}
+                                    </a>
+                                {/if}
                             </td>
                         </tr>
                     {/foreach}
+                    {if $line.unlisted}
+                        <tr>
+                            <td colspan="3" class="text-muted">{l s='And %d more, not listed.' sprintf=[$line.unlisted|intval] mod='productfeed'}</td>
+                        </tr>
+                    {/if}
                     </tbody>
                 </table>
             </details>
-        {/if}
+        {/foreach}
     {/if}
 
     {* Each action has its own form and a hidden field naming it, as in

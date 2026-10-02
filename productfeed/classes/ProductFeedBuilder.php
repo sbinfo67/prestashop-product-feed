@@ -760,6 +760,10 @@ class ProductFeedBuilder
         ++$this->report[$kind][$reason];
 
         if (count($this->report['issues']) < self::REPORT_LIMIT) {
+            // Products skipped before being loaded still deserve their name.
+            if ($label === '' && $idProduct > 0) {
+                $label = ProductFeedText::plain((string) Product::getProductName($idProduct, null, $this->idLang), ProductFeedBuilder::MAX_TITLE);
+            }
             $this->report['issues'][] = [
                 'kind' => $kind,
                 'reason' => $reason,
